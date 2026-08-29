@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Клубы</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #14100e;
+    --bg-soft: #1c1613;
+    --panel: #241c18;
+    --line: #3a2e27;
+    --amber: #cf9a4c;
+    --amber-soft: #e9c98a;
+    --wine: #7a2233;
+    --ink: #ede3d3;
+    --ink-soft: #b6a591;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Nunito', sans-serif;
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior: none;
+  }
+  h1, h2, h3, .display {
+    font-family: 'Cormorant Garamond', serif;
+    letter-spacing: 0.02em;
+  }
+  button { font-family: inherit; }
+  .screen { display: none; min-height: 100vh; flex-direction: column; }
+  .screen.active { display: flex; }
+
+  /* ---- список клубов ---- */
+  #screen-list { padding: 28px 20px 100px; }
+  .list-title { font-size: 34px; color: var(--amber-soft); margin: 6px 0 4px; text-align: center; }
+  .list-sub { text-align: center; color: var(--ink-soft); font-size: 13px; margin-bottom: 26px; }
+  .club-card {
+    background: linear-gradient(180deg, var(--panel), var(--bg-soft));
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 16px 18px;
+    margin-bottom: 12px;
+    display: flex; align-items: center; justify-content: space-between;
+    cursor: pointer;
+  }
+  .club-card .name { font-family: 'Cormorant Garamond', serif; font-size: 22px; color: var(--ink); }
+  .club-card .arrow { color: var(--amber); font-size: 20px; }
+  .empty-hint { text-align: center; color: var(--ink-soft); font-size: 14px; margin: 30px 10px; line-height: 1.6; }
+
+  .primary-btn {
+    background: linear-gradient(180deg, var(--amber-soft), var(--amber));
+    color: #221a12;
+    border: none;
+    border-radius: 12px;
+    padding: 14px;
+    font-weight: 700;
+    font-size: 15px;
+    width: 100%;
+    box-shadow: 0 3px 0 #8a6224;
+  }
+  .primary-btn:active { transform: translateY(2px); box-shadow: 0 1px 0 #8a6224; }
+  .ghost-btn {
+    background: transparent;
+    color: var(--amber-soft);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 13px;
+    font-weight: 600;
+    font-size: 14px;
+    width: 100%;
+  }
+  .btn-row { display: flex; flex-direction: column; gap: 10px; margin-top: 18px; }
+
+  .field-label { font-size: 12px; color: var(--ink-soft); text-transform: uppercase; letter-spacing: 0.08em; margin: 16px 0 6px; }
+  .field-input {
+    width: 100%;
+    background: var(--bg-soft);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 13px 14px;
+    color: var(--ink);
+    font-size: 15px;
+  }
+  .field-input:focus { outline: none; border-color: var(--amber); }
+
+  /* ---- создание / вход по коду ---- */
+  .sub-screen { padding: 24px 20px; }
+  .back-link { color: var(--ink-soft); font-size: 14px; margin-bottom: 18px; display: inline-block; cursor: pointer; }
+  .sub-title { font-size: 26px; color: var(--amber-soft); margin: 0 0 18px; }
+
+  /* ---- чат ---- */
+  #screen-chat { position: relative; min-height: 100vh; }
+  .chat-bg {
+    position: fixed; inset: 0;
+    background-size: cover; background-position: center;
+    background-color: var(--bg);
+  }
+  .chat-bg::after {
+    content: ""; position: absolute; inset: 0;
+    background: linear-gradient(180deg, rgba(20,16,14,0.72) 0%, rgba(20,16,14,0.55) 40%, rgba(20,16,14,0.85) 100%);
+  }
+  .chat-top {
+    position: relative; z-index: 2;
+    display: flex; align-items: center; gap: 10px;
+    padding: 14px 14px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    background: rgba(20,16,14,0.35);
+  }
+  .icon-btn {
+    background: rgba(255,255,255,0.08);
+    border: none; border-radius: 10px;
+    width: 36px; height: 36px;
+    color: var(--amber-soft);
+    font-size: 17px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .chat-title { flex: 1; font-family: 'Cormorant Garamond', serif; font-size: 21px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .chat-body {
+    position: relative; z-index: 1;
+    flex: 1;
+    display: flex; flex-direction: column;
+    min-height: 0;
+  }
+  .messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 14px 10px;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .msg { max-width: 78%; padding: 9px 13px; border-radius: 14px; font-size: 14.5px; line-height: 1.4; }
+  .msg .who { font-size: 11px; color: var(--amber-soft); margin-bottom: 3px; font-weight: 700; }
+  .msg.mine { align-self: flex-end; background: rgba(207,154,76,0.85); color: #241a10; border-bottom-right-radius: 4px; }
+  .msg.theirs { align-self: flex-start; background: rgba(36,28,24,0.82); color: var(--ink); border-bottom-left-radius: 4px; border: 1px solid rgba(255,255,255,0.06); }
+  .msg.theirs .who { color: var(--amber-soft); }
+  .msg.mine .who { display: none; }
+  .msg-time { font-size: 10px; opacity: 0.6; margin-top: 3px; text-align: right; }
+
+  .playback-banner {
+    position: relative; z-index: 2;
+    display: none;
+    align-items: center; gap: 10px;
+    padding: 10px 14px;
+    background: rgba(122,34,51,0.55);
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    font-size: 13px;
+    color: var(--ink);
+  }
+  .playback-banner.show { display: flex; }
+  .playback-banner .txt { flex: 1; line-height: 1.35; }
+  .playback-banner button {
+    background: var(--amber);
+    color: #221a12;
+    border: none;
+    border-radius: 8px;
+    padding: 7px 12px;
+    font-size: 12.5px;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+  .playback-banner button.secondary {
+    background: transparent;
+    border: 1px solid rgba(255,255,255,0.3);
+    color: var(--ink);
+  }
+
+  .chat-input-row {
+    position: relative; z-index: 2;
+    display: flex; gap: 8px;
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+    background: rgba(20,16,14,0.55);
+    border-top: 1px solid rgba(255,255,255,0.08);
+  }
+  .chat-input-row input {
+    flex: 1;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 20px;
+    padding: 11px 16px;
+    color: var(--ink);
+    font-size: 14.5px;
+  }
+  .chat-input-row input:focus { outline: none; border-color: var(--amber); }
+  .send-btn {
+    background: var(--amber);
+    color: #221a12;
+    border: none;
+    border-radius: 50%;
+    width: 42px; height: 42px;
+    font-size: 17px;
+    flex-shrink: 0;
+  }
+
+  /* ---- настройки клуба ---- */
+  #screen-settings { padding: 22px 20px 60px; }
+  .invite-box {
+    background: var(--bg-soft);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 12px 14px;
+    font-size: 13px;
+    color: var(--ink-soft);
+    word-break: break-all;
+    margin-bottom: 10px;
+  }
+  .file-label {
+    display: block;
+    text-align: center;
+    background: var(--bg-soft);
+    border: 1px dashed var(--line);
+    border-radius: 12px;
+    padding: 16px;
+    color: var(--amber-soft);
+    font-size: 14px;
+    cursor: pointer;
+  }
+  .file-label input { display: none; }
+  .bg-preview {
+    width: 100%; height: 120px; object-fit: cover;
+    border-radius: 12px; margin-bottom: 10px;
+    border: 1px solid var(--line);
+  }
+
+  .toast {
+    position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%) translateY(20px);
+    background: var(--panel); border: 1px solid var(--line);
+    color: var(--ink); padding: 11px 18px; border-radius: 12px;
+    font-size: 14px; opacity: 0; transition: all 0.25s ease; z-index: 50; max-width: 86%; text-align: center;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  #yt-player-holder { position: fixed; width: 2px; height: 2px; overflow: hidden; opacity: 0; pointer-events: none; }
+</style>
+</head>
+<body>
+
+<div id="screen-list" class="screen active">
+  <div class="list-title">Клубы</div>
+  <div class="list-sub">Тайные комнаты для совместных историй</div>
+  <div id="clubs-list"></div>
+  <div id="clubs-empty" class="empty-hint" style="display:none;">
+    Пока нет ни одного клуба.<br />Создайте свой или войдите по коду от друга.
+  </div>
+  <div class="btn-row">
+    <button class="primary-btn" onclick="showScreen('create')">+ Создать клуб</button>
+    <button class="ghost-btn" onclick="showScreen('join')">Войти по коду</button>
+  </div>
+</div>
+
+<div id="screen-create" class="screen sub-screen">
+  <span class="back-link" onclick="showScreen('list')">&larr; Назад</span>
+  <div class="sub-title">Новый клуб</div>
+  <div class="field-label">Название</div>
+  <input id="create-name" class="field-input" placeholder="Например, «Полуночный салон»" maxlength="60" />
+  <div class="btn-row">
+    <button class="primary-btn" onclick="createClub()">Создать</button>
+  </div>
+</div>
+
+<div id="screen-join" class="screen sub-screen">
+  <span class="back-link" onclick="showScreen('list')">&larr; Назад</span>
+  <div class="sub-title">Войти по коду</div>
+  <div class="field-label">Код приглашения</div>
+  <input id="join-code" class="field-input" placeholder="Например, a1b2c3d4" maxlength="20" />
+  <div class="btn-row">
+    <button class="primary-btn" onclick="joinClub()">Войти</button>
+  </div>
+</div>
+
+<div id="screen-chat" class="screen">
+  <div id="chat-bg" class="chat-bg"></div>
+  <div class="chat-top">
+    <button class="icon-btn" onclick="leaveChat()">&larr;</button>
+    <div id="chat-title" class="chat-title">Клуб</div>
+    <button id="music-btn" class="icon-btn" onclick="toggleMusic()">&#9835;</button>
+    <button class="icon-btn" onclick="openSettings()">&#9881;</button>
+  </div>
+  <div class="chat-body">
+    <div id="playback-banner" class="playback-banner"></div>
+    <div id="messages" class="messages"></div>
+    <div class="chat-input-row">
+      <input id="msg-input" placeholder="Сообщение..." maxlength="4000" />
+      <button class="send-btn" onclick="sendMessage()">&#10148;</button>
+    </div>
+  </div>
+</div>
+
+<div id="screen-settings" class="screen sub-screen">
+  <span class="back-link" onclick="showScreen('chat')">&larr; Назад в чат</span>
+  <div class="sub-title">Настройки клуба</div>
+
+  <div class="field-label">Приглашение</div>
+  <div id="invite-link-box" class="invite-box"></div>
+  <div class="btn-row" style="margin-top:0; margin-bottom: 18px;">
+    <button class="ghost-btn" onclick="shareInvite()">Поделиться приглашением</button>
+  </div>
+
+  <div class="field-label">Фон клуба</div>
+  <img id="bg-preview" class="bg-preview" style="display:none;" />
+  <label class="file-label">
+    Выбрать фотографию
+    <input type="file" id="bg-input" accept="image/*" onchange="uploadBackground(this.files[0])" />
+  </label>
+
+  <div class="field-label">Музыка (ссылка на YouTube)</div>
+  <input id="music-input" class="field-input" placeholder="https://youtube.com/watch?v=..." />
+  <div class="btn-row">
+    <button class="primary-btn" onclick="saveMusic()">Сохранить</button>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+<div id="yt-player-holder"></div>
+
+<script>
+var tg = window.Telegram && window.Telegram.WebApp;
+if (tg) { tg.ready(); tg.expand(); }
+
+var screens = { list: 'screen-list', create: 'screen-create', join: 'screen-join', chat: 'screen-chat', settings: 'screen-settings' };
+var currentClub = null;
+var lastMessageId = 0;
+var pollTimer = null;
+var ytPlayer = null;
+var ytReady = false;
+var musicOn = false;
+
+function showScreen(name) {
+  Object.keys(screens).forEach(function (k) {
+    document.getElementById(screens[k]).classList.toggle('active', k === name);
+  });
+}
+
+function showToast(text) {
+  var el = document.getElementById('toast');
+  el.textContent = text;
+  el.classList.add('show');
+  setTimeout(function () { el.classList.remove('show'); }, 2600);
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+
+function api(path, options) {
+  options = options || {};
+  options.headers = Object.assign({ 'X-Tg-Init-Data': (tg && tg.initData) || '' }, options.headers || {});
+  return fetch(path, options).then(function (r) {
+    return r.json().then(function (data) {
+      if (!r.ok) throw new Error(data.error || 'Ошибка сервера');
+      return data;
+    });
+  });
+}
+
+// ---------- список клубов ----------
+
+function loadClubs() {
+  api('/api/clubs').then(function (data) {
+    var list = document.getElementById('clubs-list');
+    var empty = document.getElementById('clubs-empty');
+    list.innerHTML = '';
+    if (!data.clubs.length) { empty.style.display = 'block'; return; }
+    empty.style.display = 'none';
+    data.clubs.forEach(function (c) {
+      var card = document.createElement('div');
+      card.className = 'club-card';
+      card.innerHTML = '<span class="name">' + escapeHtml(c.name) + '</span><span class="arrow">&rarr;</span>';
+      card.onclick = function () { openChat(c); };
+      list.appendChild(card);
+    });
+  }).catch(function (e) { showToast(e.message); });
+}
+
+function createClub() {
+  var name = document.getElementById('create-name').value.trim();
+  if (!name) return showToast('Введите название.');
+  api('/api/clubs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name }) })
+    .then(function (data) {
+      document.getElementById('create-name').value = '';
+      openChat(data.club);
+    }).catch(function (e) { showToast(e.message); });
+}
+
+function joinClub() {
+  var code = document.getElementById('join-code').value.trim();
+  if (!code) return showToast('Введите код.');
+  api('/api/club-join', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ invite_code: code }) })
+    .then(function (data) {
+      document.getElementById('join-code').value = '';
+      openChat(data.club);
+    }).catch(function (e) { showToast(e.message); });
+}
+
+// ---------- чат ----------
+
+function openChat(club) {
+  currentClub = club;
+  lastMessageId = 0;
+  document.getElementById('messages').innerHTML = '';
+  document.getElementById('chat-title').textContent = club.name;
+  applyBackground(club);
+  showScreen('chat');
+  pollTick();
+  if (pollTimer) clearInterval(pollTimer);
+  pollTimer = setInterval(pollTick, 2500);
+}
+
+function pollTick() {
+  pollMessages();
+  pollPlayback();
+}
+
+function backgroundImageUrl(club) {
+  if (!club || !club.background_file_id) return null;
+  return '/api/club-bg-image?club_id=' + club.id + '&v=' + encodeURIComponent(club.background_updated_at || '');
+}
+
+function applyBackground(club) {
+  var bg = document.getElementById('chat-bg');
+  var url = backgroundImageUrl(club);
+  bg.style.backgroundImage = url ? "url('" + url + "')" : 'none';
+}
+
+function leaveChat() {
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+  stopLocalPlayback();
+  playbackKeySeen = null;
+  cuedVideoId = null;
+  currentClub = null;
+  showScreen('list');
+  loadClubs();
+}
+
+function renderMessage(m) {
+  var mine = tg && tg.initDataUnsafe && tg.initDataUnsafe.user && String(tg.initDataUnsafe.user.id) === String(m.user_id);
+  var div = document.createElement('div');
+  div.className = 'msg ' + (mine ? 'mine' : 'theirs');
+  var time = new Date(m.created_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+  div.innerHTML = '<div class="who">' + escapeHtml(m.user_name || 'Гость') + '</div>' +
+    '<div>' + escapeHtml(m.text) + '</div>' +
+    '<div class="msg-time">' + time + '</div>';
+  return div;
+}
+
+function pollMessages() {
+  if (!currentClub) return;
+  api('/api/messages?club_id=' + currentClub.id + '&after_id=' + lastMessageId)
+    .then(function (data) {
+      if (!data.messages.length) return;
+      var box = document.getElementById('messages');
+      var wasAtBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 60;
+      data.messages.forEach(function (m) {
+        box.appendChild(renderMessage(m));
+        lastMessageId = Math.max(lastMessageId, m.id);
+      });
+      if (wasAtBottom) box.scrollTop = box.scrollHeight;
+    }).catch(function () {});
+}
+
+function sendMessage() {
+  var input = document.getElementById('msg-input');
+  var text = input.value.trim();
+  if (!text || !currentClub) return;
+  input.value = '';
+  api('/api/messages?club_id=' + currentClub.id, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: text })
+  }).then(function () { pollMessages(); }).catch(function (e) { showToast(e.message); });
+}
+document.getElementById('msg-input').addEventListener('keydown', function (e) {
+  if (e.key === 'Enter') sendMessage();
+});
+
+// ---------- настройки клуба ----------
+
+function openSettings() {
+  if (!currentClub) return;
+  var botUsername = window.BOT_USERNAME || '';
+  var link = botUsername
+    ? 'https://t.me/' + botUsername + '/app?startapp=' + currentClub.invite_code
+    : 'Код: ' + currentClub.invite_code;
+  document.getElementById('invite-link-box').textContent = link;
+  var preview = document.getElementById('bg-preview');
+  var bgUrl = backgroundImageUrl(currentClub);
+  if (bgUrl) { preview.src = bgUrl; preview.style.display = 'block'; }
+  else { preview.style.display = 'none'; }
+  document.getElementById('music-input').value = currentClub.music_url || '';
+  showScreen('settings');
+}
+
+function shareInvite() {
+  var botUsername = window.BOT_USERNAME || '';
+  if (!botUsername || !currentClub) return showToast('Ссылка ещё не настроена.');
+  var link = 'https://t.me/' + botUsername + '/app?startapp=' + currentClub.invite_code;
+  var shareUrl = 'https://t.me/share/url?url=' + encodeURIComponent(link) + '&text=' + encodeURIComponent('Присоединяйся к клубу «' + currentClub.name + '»');
+  if (tg) tg.openTelegramLink(shareUrl); else window.open(shareUrl, '_blank');
+}
+
+function uploadBackground(file) {
+  if (!file || !currentClub) return;
+  showToast('Загружаю фото...');
+  fetch('/api/club-background?id=' + currentClub.id, {
+    method: 'POST',
+    headers: { 'Content-Type': file.type || 'image/jpeg', 'X-Tg-Init-Data': (tg && tg.initData) || '' },
+    body: file
+  }).then(function (r) { return r.json().then(function (d) { if (!r.ok) throw new Error(d.error); return d; }); })
+    .then(function (data) {
+      currentClub.background_file_id = data.background_file_id;
+      currentClub.background_updated_at = data.background_updated_at;
+      applyBackground(currentClub);
+      var bgUrl = backgroundImageUrl(currentClub);
+      document.getElementById('bg-preview').src = bgUrl;
+      document.getElementById('bg-preview').style.display = 'block';
+      showToast('Фон обновлён.');
+    }).catch(function (e) { showToast(e.message); });
+}
+
+function saveMusic() {
+  if (!currentClub) return;
+  var url = document.getElementById('music-input').value.trim();
+  api('/api/club?id=' + currentClub.id, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ music_url: url }) })
+    .then(function () {
+      currentClub.music_url = url || null;
+      cuedVideoId = null;
+      stopLocalPlayback();
+      showToast('Музыка сохранена.');
+    }).catch(function (e) { showToast(e.message); });
+}
+
+// ---------- музыка (YouTube), синхронный запуск у всех участников ----------
+//
+// Никто не слышит музыку в одиночку: первый нажавший переводит клуб в
+// состояние "waiting", остальные подтверждают через "Готов", и только когда
+// готовы все (или инициатор жмёт "Начать без остальных") сервер назначает
+// одно общее время старта (start_at) - все клиенты запускают видео по нему,
+// а опоздавшие сразу перематывают на нужное место (seekTo), а не начинают
+// сначала. Плеер заранее "прогревается" беззвучным play+pause по нажатию
+// кнопки (реальный жест пользователя), чтобы более поздний программный
+// playVideo() по таймеру не заблокировался политикой браузера.
+
+var cuedVideoId = null;
+var playbackKeySeen = null;
+var scheduledTimeout = null;
+var lastPlaybackState = null;
+
+function extractYouTubeId(url) {
+  if (!url) return null;
+  var m = String(url).match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([A-Za-z0-9_-]{6,})/);
+  return m ? m[1] : null;
+}
+
+function loadYouTubeApi() {
+  return new Promise(function (resolve) {
+    if (window.YT && window.YT.Player) return resolve();
+    window.onYouTubeIframeAPIReady = resolve;
+    var tag = document.createElement('script');
+    tag.src = 'https://www.youtube.com/iframe_api';
+    document.body.appendChild(tag);
+  });
+}
+
+function ensurePlayer(videoId) {
+  return loadYouTubeApi().then(function () {
+    if (ytPlayer && cuedVideoId === videoId) return ytPlayer;
+    return new Promise(function (resolve) {
+      if (ytPlayer) { try { ytPlayer.destroy(); } catch (e) {} ytPlayer = null; }
+      cuedVideoId = videoId;
+      ytPlayer = new YT.Player('yt-player-holder', {
+        videoId: videoId,
+        playerVars: { autoplay: 0, controls: 0 },
+        events: { onReady: function (e) { resolve(e.target); } }
+      });
+    });
+  });
+}
+
+function unlockAudioGesture() {
+  if (!ytPlayer) return;
+  try {
+    ytPlayer.mute();
+    ytPlayer.playVideo();
+    setTimeout(function () { try { ytPlayer.pauseVideo(); } catch (e) {} }, 200);
+  } catch (e) {}
+}
+
+function myUserId() {
+  return tg && tg.initDataUnsafe && tg.initDataUnsafe.user && String(tg.initDataUnsafe.user.id);
+}
+
+function setMusicButtonActive(on) {
+  var btn = document.getElementById('music-btn');
+  btn.style.color = on ? '#e9c98a' : '';
+  btn.style.background = on ? 'rgba(207,154,76,0.35)' : '';
+}
+
+function stopLocalPlayback() {
+  if (scheduledTimeout) { clearTimeout(scheduledTimeout); scheduledTimeout = null; }
+  musicOn = false;
+  if (ytPlayer && ytPlayer.pauseVideo) { try { ytPlayer.pauseVideo(); } catch (e) {} }
+  setMusicButtonActive(false);
+}
+
+function scheduleStart(videoId, startAtIso) {
+  ensurePlayer(videoId).then(function () {
+    var startAtMs = new Date(startAtIso).getTime();
+    var delay = startAtMs - Date.now();
+    if (scheduledTimeout) clearTimeout(scheduledTimeout);
+    var doPlay = function () {
+      var elapsed = Math.max(0, (Date.now() - startAtMs) / 1000);
+      try {
+        ytPlayer.unMute();
+        ytPlayer.seekTo(elapsed, true);
+        ytPlayer.playVideo();
+      } catch (e) {}
+      musicOn = true;
+      setMusicButtonActive(true);
+    };
+    if (delay > 50) scheduledTimeout = setTimeout(doPlay, delay); else doPlay();
+  });
+}
+
+function toggleMusic() {
+  if (!currentClub || !lastPlaybackState) return;
+  var s = lastPlaybackState;
+  var uid = myUserId();
+  if (s.state === 'idle') {
+    requestStartMusic();
+  } else if (s.state === 'waiting') {
+    if (s.ready_user_ids.indexOf(uid) === -1) markReady(); else if (String(s.initiated_by) === uid) forceStart();
+  } else if (s.state === 'playing') {
+    requestStopMusic();
+  }
+}
+
+function requestStartMusic() {
+  if (!currentClub) return;
+  var videoId = extractYouTubeId(currentClub.music_url);
+  if (!videoId) return showToast('Ссылка на музыку не задана. Добавьте её в настройках клуба.');
+  ensurePlayer(videoId).then(unlockAudioGesture);
+  api('/api/club-playback-start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ club_id: currentClub.id }) })
+    .then(pollPlayback).catch(function (e) { showToast(e.message); pollPlayback(); });
+}
+
+function markReady() {
+  if (!currentClub) return;
+  unlockAudioGesture();
+  api('/api/club-playback-ready', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ club_id: currentClub.id }) })
+    .then(pollPlayback).catch(function (e) { showToast(e.message); pollPlayback(); });
+}
+
+function forceStart() {
+  if (!currentClub) return;
+  api('/api/club-playback-force', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ club_id: currentClub.id }) })
+    .then(pollPlayback).catch(function (e) { showToast(e.message); pollPlayback(); });
+}
+
+function requestStopMusic() {
+  if (!currentClub) return;
+  api('/api/club-playback-stop', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ club_id: currentClub.id }) })
+    .then(pollPlayback).catch(function (e) { showToast(e.message); pollPlayback(); });
+}
+
+function renderPlaybackBanner(s) {
+  var el = document.getElementById('playback-banner');
+  var uid = myUserId();
+  if (s.state === 'waiting') {
+    var iAmReady = s.ready_user_ids.indexOf(uid) !== -1;
+    var iAmInitiator = String(s.initiated_by) === uid;
+    var txt = iAmReady
+      ? 'Ждём остальных: готовы ' + s.ready_user_ids.length + ' из ' + s.total_members + '...'
+      : 'Кто-то предлагает включить музыку в клубе.';
+    var btns = '';
+    if (!iAmReady) btns += '<button onclick="markReady()">Готов</button>';
+    if (iAmInitiator) btns += '<button class="secondary" onclick="forceStart()">Начать без остальных</button>';
+    el.innerHTML = '<div class="txt">' + txt + '</div>' + btns;
+    el.classList.add('show');
+  } else {
+    el.classList.remove('show');
+    el.innerHTML = '';
+  }
+}
+
+function pollPlayback() {
+  if (!currentClub) return;
+  api('/api/club-playback?club_id=' + currentClub.id).then(function (s) {
+    lastPlaybackState = s;
+    renderPlaybackBanner(s);
+    if (s.state === 'waiting' && s.video_id && cuedVideoId !== s.video_id) {
+      ensurePlayer(s.video_id);
+    }
+    if (s.state === 'playing' && s.start_at) {
+      var key = currentClub.id + ':' + s.start_at;
+      if (playbackKeySeen !== key) { playbackKeySeen = key; scheduleStart(s.video_id, s.start_at); }
+    }
+    if (s.state === 'idle') { playbackKeySeen = null; stopLocalPlayback(); }
+  }).catch(function () {});
+}
+
+// ---------- запуск ----------
+
+function init() {
+  var startParam = tg && tg.initDataUnsafe && tg.initDataUnsafe.start_param;
+  if (startParam) {
+    api('/api/club-join', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ invite_code: startParam }) })
+      .then(function (data) { openChat(data.club); })
+      .catch(function (e) { showToast(e.message); showScreen('list'); loadClubs(); });
+  } else {
+    showScreen('list');
+    loadClubs();
+  }
+}
+init();
+</script>
+</body>
+</html>
