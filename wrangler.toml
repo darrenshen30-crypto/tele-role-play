@@ -1,0 +1,9 @@
+name = "tele-role-play"
+pages_build_output_dir = "."
+compatibility_date = "2026-08-29"
+compatibility_flags = ["nodejs_compat"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "tele-role-play"
+database_id = "c1110bce-a05e-4671-8c9d-53f8ef311fb9"
