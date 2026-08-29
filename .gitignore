@@ -8,3 +8,6 @@ Thumbs.db
 
 # Локальный кеш инструмента дизайн-проверки
 .impeccable/
+
+# Локальный кеш Wrangler (Cloudflare CLI)
+.wrangler/
