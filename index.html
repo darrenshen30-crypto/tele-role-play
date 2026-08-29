@@ -52,6 +52,7 @@
   }
   .club-card .name { font-family: 'Cormorant Garamond', serif; font-size: 22px; color: var(--ink); }
   .club-card .arrow { color: var(--amber); font-size: 20px; }
+  .club-card .count { color: var(--ink-soft); font-size: 12px; margin-right: 10px; }
   .empty-hint { text-align: center; color: var(--ink-soft); font-size: 14px; margin: 30px 10px; line-height: 1.6; }
 
   .primary-btn {
@@ -198,18 +199,8 @@
     flex-shrink: 0;
   }
 
-  /* ---- настройки клуба ---- */
+  /* ---- настройки локации ---- */
   #screen-settings { padding: 22px 20px 60px; }
-  .invite-box {
-    background: var(--bg-soft);
-    border: 1px solid var(--line);
-    border-radius: 12px;
-    padding: 12px 14px;
-    font-size: 13px;
-    color: var(--ink-soft);
-    word-break: break-all;
-    margin-bottom: 10px;
-  }
   .file-label {
     display: block;
     text-align: center;
@@ -242,21 +233,28 @@
 <body>
 
 <div id="screen-list" class="screen active">
-  <div class="list-title">Клубы</div>
+  <div class="list-title">Локации</div>
   <div class="list-sub">Тайные комнаты для совместных историй</div>
-  <div id="clubs-list"></div>
+  <div id="categories-list"></div>
   <div id="clubs-empty" class="empty-hint" style="display:none;">
-    Пока нет ни одного клуба.<br />Создайте свой или войдите по коду от друга.
+    Пока нет ни одной локации.<br />Создайте первую.
   </div>
   <div class="btn-row">
-    <button class="primary-btn" onclick="showScreen('create')">+ Создать клуб</button>
-    <button class="ghost-btn" onclick="showScreen('join')">Войти по коду</button>
+    <button class="primary-btn" onclick="showScreen('create')">+ Создать локацию</button>
   </div>
+</div>
+
+<div id="screen-category" class="screen sub-screen">
+  <span class="back-link" onclick="showScreen('list')">&larr; Назад</span>
+  <div id="category-title" class="sub-title">Категория</div>
+  <div id="category-list"></div>
 </div>
 
 <div id="screen-create" class="screen sub-screen">
   <span class="back-link" onclick="showScreen('list')">&larr; Назад</span>
-  <div class="sub-title">Новый клуб</div>
+  <div class="sub-title">Новая локация</div>
+  <div class="field-label">Категория</div>
+  <input id="create-category" class="field-input" placeholder="Например, «Клуб» или «Дом»" maxlength="40" />
   <div class="field-label">Название</div>
   <input id="create-name" class="field-input" placeholder="Например, «Полуночный салон»" maxlength="60" />
   <div class="btn-row">
@@ -264,21 +262,11 @@
   </div>
 </div>
 
-<div id="screen-join" class="screen sub-screen">
-  <span class="back-link" onclick="showScreen('list')">&larr; Назад</span>
-  <div class="sub-title">Войти по коду</div>
-  <div class="field-label">Код приглашения</div>
-  <input id="join-code" class="field-input" placeholder="Например, a1b2c3d4" maxlength="20" />
-  <div class="btn-row">
-    <button class="primary-btn" onclick="joinClub()">Войти</button>
-  </div>
-</div>
-
 <div id="screen-chat" class="screen">
   <div id="chat-bg" class="chat-bg"></div>
   <div class="chat-top">
     <button class="icon-btn" onclick="leaveChat()">&larr;</button>
-    <div id="chat-title" class="chat-title">Клуб</div>
+    <div id="chat-title" class="chat-title">Локация</div>
     <button id="music-btn" class="icon-btn" onclick="toggleMusic()">&#9835;</button>
     <button class="icon-btn" onclick="openSettings()">&#9881;</button>
   </div>
@@ -294,15 +282,9 @@
 
 <div id="screen-settings" class="screen sub-screen">
   <span class="back-link" onclick="showScreen('chat')">&larr; Назад в чат</span>
-  <div class="sub-title">Настройки клуба</div>
+  <div class="sub-title">Настройки локации</div>
 
-  <div class="field-label">Приглашение</div>
-  <div id="invite-link-box" class="invite-box"></div>
-  <div class="btn-row" style="margin-top:0; margin-bottom: 18px;">
-    <button class="ghost-btn" onclick="shareInvite()">Поделиться приглашением</button>
-  </div>
-
-  <div class="field-label">Фон клуба</div>
+  <div class="field-label">Фон локации</div>
   <img id="bg-preview" class="bg-preview" style="display:none;" />
   <label class="file-label">
     Выбрать фотографию
@@ -323,7 +305,9 @@
 var tg = window.Telegram && window.Telegram.WebApp;
 if (tg) { tg.ready(); tg.expand(); }
 
-var screens = { list: 'screen-list', create: 'screen-create', join: 'screen-join', chat: 'screen-chat', settings: 'screen-settings' };
+var screens = { list: 'screen-list', category: 'screen-category', create: 'screen-create', join: 'screen-join', chat: 'screen-chat', settings: 'screen-settings' };
+var allClubs = [];
+var currentCategory = null;
 var currentClub = null;
 var lastMessageId = 0;
 var pollTimer = null;
@@ -365,45 +349,72 @@ function api(path, options) {
 
 function loadClubs() {
   api('/api/clubs').then(function (data) {
-    var list = document.getElementById('clubs-list');
-    var empty = document.getElementById('clubs-empty');
-    list.innerHTML = '';
-    if (!data.clubs.length) { empty.style.display = 'block'; return; }
-    empty.style.display = 'none';
-    data.clubs.forEach(function (c) {
-      var card = document.createElement('div');
-      card.className = 'club-card';
-      card.innerHTML = '<span class="name">' + escapeHtml(c.name) + '</span><span class="arrow">&rarr;</span>';
-      card.onclick = function () { openChat(c); };
-      list.appendChild(card);
-    });
+    allClubs = data.clubs;
+    renderCategories();
   }).catch(function (e) { showToast(e.message); });
 }
 
-function createClub() {
-  var name = document.getElementById('create-name').value.trim();
-  if (!name) return showToast('Введите название.');
-  api('/api/clubs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name }) })
-    .then(function (data) {
-      document.getElementById('create-name').value = '';
-      openChat(data.club);
-    }).catch(function (e) { showToast(e.message); });
+function renderCategories() {
+  var list = document.getElementById('categories-list');
+  var empty = document.getElementById('clubs-empty');
+  list.innerHTML = '';
+  if (!allClubs.length) { empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+
+  var byCategory = {};
+  var order = [];
+  allClubs.forEach(function (c) {
+    var cat = (c.category || 'Без категории').trim() || 'Без категории';
+    if (!byCategory[cat]) { byCategory[cat] = []; order.push(cat); }
+    byCategory[cat].push(c);
+  });
+
+  order.forEach(function (cat) {
+    var card = document.createElement('div');
+    card.className = 'club-card';
+    card.innerHTML = '<span class="name">' + escapeHtml(cat) + '</span>' +
+      '<span><span class="count">' + byCategory[cat].length + '</span><span class="arrow">&rarr;</span></span>';
+    card.onclick = function () { openCategory(cat); };
+    list.appendChild(card);
+  });
 }
 
-function joinClub() {
-  var code = document.getElementById('join-code').value.trim();
-  if (!code) return showToast('Введите код.');
-  api('/api/club-join', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ invite_code: code }) })
+function openCategory(cat) {
+  currentCategory = cat;
+  document.getElementById('category-title').textContent = cat;
+  var list = document.getElementById('category-list');
+  list.innerHTML = '';
+  allClubs.filter(function (c) { return ((c.category || 'Без категории').trim() || 'Без категории') === cat; })
+    .forEach(function (c) {
+      var card = document.createElement('div');
+      card.className = 'club-card';
+      card.innerHTML = '<span class="name">' + escapeHtml(c.name) + '</span><span class="arrow">&rarr;</span>';
+      card.onclick = function () { openChat(c, 'category'); };
+      list.appendChild(card);
+    });
+  showScreen('category');
+}
+
+function createClub() {
+  var category = document.getElementById('create-category').value.trim();
+  var name = document.getElementById('create-name').value.trim();
+  if (!category) return showToast('Введите категорию.');
+  if (!name) return showToast('Введите название.');
+  api('/api/clubs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ category: category, name: name }) })
     .then(function (data) {
-      document.getElementById('join-code').value = '';
+      document.getElementById('create-category').value = '';
+      document.getElementById('create-name').value = '';
       openChat(data.club);
     }).catch(function (e) { showToast(e.message); });
 }
 
 // ---------- чат ----------
 
-function openChat(club) {
+var chatOrigin = 'list';
+
+function openChat(club, origin) {
   currentClub = club;
+  chatOrigin = origin || 'list';
   lastMessageId = 0;
   document.getElementById('messages').innerHTML = '';
   document.getElementById('chat-title').textContent = club.name;
@@ -436,8 +447,11 @@ function leaveChat() {
   playbackKeySeen = null;
   cuedVideoId = null;
   currentClub = null;
-  showScreen('list');
-  loadClubs();
+  api('/api/clubs').then(function (data) {
+    allClubs = data.clubs;
+    if (chatOrigin === 'category' && currentCategory) { openCategory(currentCategory); }
+    else { renderCategories(); showScreen('list'); }
+  }).catch(function () { showScreen('list'); loadClubs(); });
 }
 
 function renderMessage(m) {
@@ -479,29 +493,16 @@ document.getElementById('msg-input').addEventListener('keydown', function (e) {
   if (e.key === 'Enter') sendMessage();
 });
 
-// ---------- настройки клуба ----------
+// ---------- настройки локации ----------
 
 function openSettings() {
   if (!currentClub) return;
-  var botUsername = window.BOT_USERNAME || '';
-  var link = botUsername
-    ? 'https://t.me/' + botUsername + '/app?startapp=' + currentClub.invite_code
-    : 'Код: ' + currentClub.invite_code;
-  document.getElementById('invite-link-box').textContent = link;
   var preview = document.getElementById('bg-preview');
   var bgUrl = backgroundImageUrl(currentClub);
   if (bgUrl) { preview.src = bgUrl; preview.style.display = 'block'; }
   else { preview.style.display = 'none'; }
   document.getElementById('music-input').value = currentClub.music_url || '';
   showScreen('settings');
-}
-
-function shareInvite() {
-  var botUsername = window.BOT_USERNAME || '';
-  if (!botUsername || !currentClub) return showToast('Ссылка ещё не настроена.');
-  var link = 'https://t.me/' + botUsername + '/app?startapp=' + currentClub.invite_code;
-  var shareUrl = 'https://t.me/share/url?url=' + encodeURIComponent(link) + '&text=' + encodeURIComponent('Присоединяйся к клубу «' + currentClub.name + '»');
-  if (tg) tg.openTelegramLink(shareUrl); else window.open(shareUrl, '_blank');
 }
 
 function uploadBackground(file) {
@@ -707,15 +708,8 @@ function pollPlayback() {
 // ---------- запуск ----------
 
 function init() {
-  var startParam = tg && tg.initDataUnsafe && tg.initDataUnsafe.start_param;
-  if (startParam) {
-    api('/api/club-join', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ invite_code: startParam }) })
-      .then(function (data) { openChat(data.club); })
-      .catch(function (e) { showToast(e.message); showScreen('list'); loadClubs(); });
-  } else {
-    showScreen('list');
-    loadClubs();
-  }
+  showScreen('list');
+  loadClubs();
 }
 init();
 </script>

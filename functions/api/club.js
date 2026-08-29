@@ -1,40 +1,38 @@
-// functions/api/club.js — детали одного клуба и обновление ссылки на музыку.
-// Изменение фона живёт отдельно, в club-background.js (там бинарная загрузка файла в R2).
+// functions/api/club.js — детали одной локации и обновление ссылки на музыку.
+// Изменение фона живёт отдельно, в club-background.js.
 
 function json(obj, status = 200) {
   return new Response(JSON.stringify(obj), { status: status, headers: { "Content-Type": "application/json" } });
 }
 
-async function isMember(env, clubId, userId) {
-  const row = await env.DB.prepare("SELECT 1 FROM club_members WHERE club_id = ? AND user_id = ?")
-    .bind(clubId, String(userId)).first();
-  return !!row;
+function isOwner(env, id) {
+  if (!env.OWNER_ID || !id) return false;
+  const ids = String(env.OWNER_ID).split(",").map(function (s) { return s.trim(); }).filter(Boolean);
+  return ids.indexOf(String(id)) !== -1;
 }
 
 export async function onRequestGet(context) {
   const env = context.env;
   const userId = context.data && context.data.tgUserId;
-  if (!userId) return json({ error: "Не удалось подтвердить пользователя." }, 403);
+  if (!isOwner(env, userId)) return json({ error: "Нет доступа." }, 403);
 
   const id = new URL(context.request.url).searchParams.get("id");
-  if (!id) return json({ error: "Не указан клуб." }, 400);
-  if (!(await isMember(env, id, userId))) return json({ error: "Вы не в этом клубе." }, 403);
+  if (!id) return json({ error: "Не указана локация." }, 400);
 
   const club = await env.DB.prepare(
-    "SELECT id, name, invite_code, background_file_id, background_updated_at, music_url, owner_id FROM clubs WHERE id = ?"
+    "SELECT id, name, category, background_file_id, background_updated_at, music_url, owner_id FROM clubs WHERE id = ?"
   ).bind(id).first();
-  if (!club) return json({ error: "Клуб не найден." }, 404);
+  if (!club) return json({ error: "Локация не найдена." }, 404);
   return json({ club: club });
 }
 
 export async function onRequestPost(context) {
   const env = context.env;
   const userId = context.data && context.data.tgUserId;
-  if (!userId) return json({ error: "Не удалось подтвердить пользователя." }, 403);
+  if (!isOwner(env, userId)) return json({ error: "Нет доступа." }, 403);
 
   const id = new URL(context.request.url).searchParams.get("id");
-  if (!id) return json({ error: "Не указан клуб." }, 400);
-  if (!(await isMember(env, id, userId))) return json({ error: "Вы не в этом клубе." }, 403);
+  if (!id) return json({ error: "Не указана локация." }, 400);
 
   const body = await context.request.json();
   const musicUrl = (body.music_url || "").trim();

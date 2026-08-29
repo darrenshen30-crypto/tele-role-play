@@ -1,4 +1,4 @@
-// functions/api/club-background.js — загрузить/заменить фон-фото клуба.
+// functions/api/club-background.js — загрузить/заменить фон-фото локации.
 // Фото не хранится ни в Supabase, ни в R2 (чтобы не заводить карту) - оно
 // отправляется через Telegram Bot API самому загрузившему (sendPhoto), а
 // Telegram даёт взамен file_id. Показываем фон позже через club-bg-image.js,
@@ -8,25 +8,24 @@ function json(obj, status = 200) {
   return new Response(JSON.stringify(obj), { status: status, headers: { "Content-Type": "application/json" } });
 }
 
-const MAX_BYTES = 10 * 1024 * 1024;
-
-async function isMember(env, clubId, userId) {
-  const row = await env.DB.prepare("SELECT 1 FROM club_members WHERE club_id = ? AND user_id = ?")
-    .bind(clubId, String(userId)).first();
-  return !!row;
+function isOwner(env, id) {
+  if (!env.OWNER_ID || !id) return false;
+  const ids = String(env.OWNER_ID).split(",").map(function (s) { return s.trim(); }).filter(Boolean);
+  return ids.indexOf(String(id)) !== -1;
 }
+
+const MAX_BYTES = 10 * 1024 * 1024;
 
 export async function onRequestPost(context) {
   const env = context.env;
   const userId = context.data && context.data.tgUserId;
-  if (!userId) return json({ error: "Не удалось подтвердить пользователя." }, 403);
+  if (!isOwner(env, userId)) return json({ error: "Нет доступа." }, 403);
 
   const id = new URL(context.request.url).searchParams.get("id");
-  if (!id) return json({ error: "Не указан клуб." }, 400);
-  if (!(await isMember(env, id, userId))) return json({ error: "Вы не в этом клубе." }, 403);
+  if (!id) return json({ error: "Не указана локация." }, 400);
 
   const club = await env.DB.prepare("SELECT id, name FROM clubs WHERE id = ?").bind(id).first();
-  if (!club) return json({ error: "Клуб не найден." }, 404);
+  if (!club) return json({ error: "Локация не найдена." }, 404);
 
   const contentType = context.request.headers.get("content-type") || "image/jpeg";
   if (contentType.indexOf("image/") !== 0) return json({ error: "Это не похоже на фото." }, 400);
@@ -36,7 +35,7 @@ export async function onRequestPost(context) {
 
   const form = new FormData();
   form.append("chat_id", String(userId));
-  form.append("caption", "Фон клуба «" + club.name + "» сохранён.");
+  form.append("caption", "Фон локации «" + club.name + "» сохранён.");
   form.append("photo", new Blob([bytes], { type: contentType }), "background.jpg");
 
   const send = await fetch("https://api.telegram.org/bot" + env.BOT_TOKEN + "/sendPhoto", {
@@ -58,7 +57,7 @@ export async function onRequestPost(context) {
       .bind(biggest.file_id, updatedAt, id).run();
   } catch (e) {
     console.log("Ошибка сохранения фона:", e.message);
-    return json({ error: "Фото загружено, но не удалось привязать к клубу." }, 500);
+    return json({ error: "Фото загружено, но не удалось привязать к локации." }, 500);
   }
 
   return json({ background_file_id: biggest.file_id, background_updated_at: updatedAt });
