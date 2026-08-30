@@ -469,13 +469,17 @@ function leaveChat() {
   }).catch(function () { showScreen('list'); loadClubs(); });
 }
 
+function formatMessageText(text) {
+  return escapeHtml(text).replace(/\*([^*\n]+)\*/g, '<b>$1</b>');
+}
+
 function renderMessage(m) {
   var mine = tg && tg.initDataUnsafe && tg.initDataUnsafe.user && String(tg.initDataUnsafe.user.id) === String(m.user_id);
   var div = document.createElement('div');
   div.className = 'msg ' + (mine ? 'mine' : 'theirs');
   var time = new Date(m.created_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
   div.innerHTML = '<div class="who">' + escapeHtml(m.user_name || 'Гость') + '</div>' +
-    '<div>' + escapeHtml(m.text) + '</div>' +
+    '<div>' + formatMessageText(m.text) + '</div>' +
     '<div class="msg-time">' + time + '</div>';
   return div;
 }
