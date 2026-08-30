@@ -30,7 +30,11 @@ export async function onRequestGet(context) {
       "WHERE club_id = ? AND (id > ? OR (edited_at IS NOT NULL AND edited_at > ?)) ORDER BY id ASC LIMIT 200"
   ).bind(clubId, afterId, afterEdit).all();
 
-  return json({ messages: results || [] });
+  const otherRead = await env.DB.prepare(
+    "SELECT MIN(last_read_message_id) AS v FROM club_reads WHERE club_id = ? AND user_id != ?"
+  ).bind(clubId, String(userId)).first();
+
+  return json({ messages: results || [], other_read_id: (otherRead && otherRead.v != null) ? otherRead.v : 0 });
 }
 
 export async function onRequestPost(context) {
