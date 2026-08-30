@@ -26,8 +26,8 @@ export async function onRequestGet(context) {
   if (!clubId) return json({ error: "Не указана локация." }, 400);
 
   const { results } = await env.DB.prepare(
-    "SELECT id, user_id, user_name, text, created_at, edited_at FROM club_messages " +
-      "WHERE club_id = ? AND (id > ? OR (edited_at IS NOT NULL AND edited_at > ?)) ORDER BY id ASC LIMIT 200"
+    "SELECT id, user_id, user_name, text, created_at, edited_at, character_name, character_avatar_file_id " +
+      "FROM club_messages WHERE club_id = ? AND (id > ? OR (edited_at IS NOT NULL AND edited_at > ?)) ORDER BY id ASC LIMIT 200"
   ).bind(clubId, afterId, afterEdit).all();
 
   const otherRead = await env.DB.prepare(
@@ -48,15 +48,24 @@ export async function onRequestPost(context) {
 
   const body = await context.request.json();
   const text = (body.text || "").trim();
+  const characterId = body.character_id;
   if (!text) return json({ error: "Пустое сообщение." }, 400);
   if (text.length > 4000) return json({ error: "Слишком длинное сообщение." }, 400);
+  if (!characterId) return json({ error: "Сначала выберите персонажа." }, 400);
+
+  const character = await env.DB.prepare("SELECT id, owner_id, name, avatar_file_id FROM characters WHERE id = ?")
+    .bind(characterId).first();
+  if (!character || String(character.owner_id) !== String(userId)) {
+    return json({ error: "Это не ваш персонаж." }, 403);
+  }
 
   let message = null;
   try {
     message = await env.DB.prepare(
-      "INSERT INTO club_messages (club_id, user_id, user_name, text) VALUES (?, ?, ?, ?) " +
-        "RETURNING id, user_id, user_name, text, created_at, edited_at"
-    ).bind(clubId, String(userId), userName || null, text).first();
+      "INSERT INTO club_messages (club_id, user_id, user_name, text, character_id, character_name, character_avatar_file_id) " +
+        "VALUES (?, ?, ?, ?, ?, ?, ?) " +
+        "RETURNING id, user_id, user_name, text, created_at, edited_at, character_name, character_avatar_file_id"
+    ).bind(clubId, String(userId), userName || null, text, character.id, character.name, character.avatar_file_id).first();
   } catch (e) {
     console.log("Ошибка отправки сообщения:", e.message);
     return json({ error: "Не удалось отправить сообщение." }, 500);

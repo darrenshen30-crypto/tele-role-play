@@ -62,6 +62,7 @@ export async function onRequestDelete(context) {
       env.DB.prepare("DELETE FROM club_playback_ready WHERE club_id = ?").bind(id),
       env.DB.prepare("DELETE FROM club_playback WHERE club_id = ?").bind(id),
       env.DB.prepare("DELETE FROM club_reads WHERE club_id = ?").bind(id),
+      env.DB.prepare("DELETE FROM club_character_choice WHERE club_id = ?").bind(id),
       env.DB.prepare("DELETE FROM club_messages WHERE club_id = ?").bind(id),
       env.DB.prepare("DELETE FROM club_members WHERE club_id = ?").bind(id),
       env.DB.prepare("DELETE FROM clubs WHERE id = ?").bind(id),

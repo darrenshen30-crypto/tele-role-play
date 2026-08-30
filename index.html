@@ -55,6 +55,35 @@
   .club-card .count { color: var(--ink-soft); font-size: 12px; margin-right: 10px; }
   .unread-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--wine); margin-left: 8px; vertical-align: middle; }
   .edited-tag { font-style: italic; opacity: 0.8; }
+
+  .char-card { display: flex; align-items: center; }
+  .avatar-thumb {
+    width: 44px; height: 44px; border-radius: 50%; object-fit: cover;
+    margin-right: 12px; border: 1px solid var(--line); flex-shrink: 0; background: var(--bg-soft);
+  }
+  .avatar-upload-label { display: block; text-align: center; cursor: pointer; margin-bottom: 16px; }
+  .avatar-upload-label input { display: none; }
+  .avatar-upload-preview {
+    width: 108px; height: 108px; border-radius: 50%; object-fit: cover;
+    display: block; margin: 0 auto 8px; border: 2px solid var(--line); background: var(--bg-soft);
+  }
+  .avatar-upload-hint { color: var(--amber-soft); font-size: 13px; }
+  .textarea-input {
+    width: 100%; min-height: 80px; resize: vertical;
+    background: var(--bg-soft); border: 1px solid var(--line); border-radius: 10px;
+    padding: 13px 14px; color: var(--ink); font-size: 15px; font-family: inherit;
+  }
+  .textarea-input:focus { outline: none; border-color: var(--amber); }
+
+  .pick-card {
+    background: linear-gradient(180deg, var(--panel), var(--bg-soft));
+    border: 1px solid var(--line); border-radius: 14px;
+    padding: 14px 16px; margin-bottom: 12px;
+    display: flex; align-items: center; cursor: pointer;
+  }
+  .pick-card .info { flex: 1; }
+  .pick-card .name { font-family: 'Cormorant Garamond', serif; font-size: 20px; color: var(--ink); }
+  .pick-card .age { font-size: 12px; color: var(--ink-soft); }
   .tick { margin-left: 4px; opacity: 0.7; }
   .tick.read { opacity: 1; color: var(--amber-soft); }
   .empty-hint { text-align: center; color: var(--ink-soft); font-size: 14px; margin: 30px 10px; line-height: 1.6; }
@@ -151,7 +180,8 @@
     display: flex; flex-direction: column; gap: 10px;
   }
   .msg { max-width: 78%; padding: 9px 13px; border-radius: 14px; font-size: 14.5px; line-height: 1.4; }
-  .msg .who { font-size: 11px; color: var(--amber-soft); margin-bottom: 3px; font-weight: 700; }
+  .msg .who { font-size: 11px; color: var(--amber-soft); margin-bottom: 3px; font-weight: 700; display: flex; align-items: center; gap: 5px; }
+  .msg-avatar { width: 18px; height: 18px; border-radius: 50%; object-fit: cover; }
   .msg.mine { align-self: flex-end; background: rgba(207,154,76,0.85); color: #241a10; border-bottom-right-radius: 4px; }
   .msg.theirs { align-self: flex-start; background: rgba(36,28,24,0.82); color: var(--ink); border-bottom-left-radius: 4px; border: 1px solid rgba(255,255,255,0.06); }
   .msg.theirs .who { color: var(--amber-soft); }
@@ -255,6 +285,7 @@
   </div>
   <div class="btn-row">
     <button class="primary-btn" onclick="showScreen('create')">+ Создать локацию</button>
+    <button class="ghost-btn" onclick="openCharactersScreen()">Мои персонажи</button>
   </div>
 </div>
 
@@ -276,11 +307,61 @@
   </div>
 </div>
 
+<div id="screen-characters" class="screen sub-screen">
+  <span class="back-link" onclick="showScreen('list')">&larr; Назад</span>
+  <div class="sub-title">Мои персонажи</div>
+  <div id="characters-list"></div>
+  <div id="characters-empty" class="empty-hint" style="display:none;">
+    Персонажей пока нет.<br />Создайте первого.
+  </div>
+  <div class="btn-row">
+    <button class="primary-btn" onclick="openCharacterEdit(null)">+ Создать персонажа</button>
+  </div>
+</div>
+
+<div id="screen-character-edit" class="screen sub-screen">
+  <span class="back-link" onclick="backFromCharacterEdit()">&larr; Назад</span>
+  <div id="character-edit-title" class="sub-title">Новый персонаж</div>
+
+  <label class="avatar-upload-label">
+    <img id="character-avatar-preview" class="avatar-upload-preview" style="display:none;" />
+    <div id="character-avatar-hint" class="avatar-upload-hint">Загрузить фото</div>
+    <input type="file" id="character-avatar-input" accept="image/*" onchange="onCharacterAvatarPicked(this.files[0])" />
+  </label>
+
+  <div class="field-label">Имя</div>
+  <input id="character-name" class="field-input" placeholder="Имя персонажа" maxlength="60" />
+  <div class="field-label">Возраст</div>
+  <input id="character-age" class="field-input" placeholder="Например, 27" maxlength="20" />
+  <div class="field-label">Краткое описание</div>
+  <textarea id="character-description" class="textarea-input" placeholder="Пара слов о персонаже" maxlength="500"></textarea>
+
+  <div class="btn-row">
+    <button class="primary-btn" onclick="saveCharacter()">Сохранить</button>
+  </div>
+  <div class="btn-row" id="character-delete-row" style="display:none;">
+    <button class="danger-btn" onclick="deleteCharacter()">Удалить персонажа</button>
+  </div>
+</div>
+
+<div id="screen-character-pick" class="screen sub-screen">
+  <span class="back-link" onclick="cancelCharacterPick()">&larr; Назад</span>
+  <div class="sub-title">За кого вы говорите?</div>
+  <div id="character-pick-list"></div>
+  <div id="character-pick-empty" class="empty-hint" style="display:none;">
+    У вас ещё нет персонажей.<br />Создайте хотя бы одного, чтобы писать в этой локации.
+  </div>
+  <div class="btn-row">
+    <button class="ghost-btn" onclick="openCharacterEdit(null, 'pick')">+ Создать персонажа</button>
+  </div>
+</div>
+
 <div id="screen-chat" class="screen">
   <div id="chat-bg" class="chat-bg"></div>
   <div class="chat-top">
     <button class="icon-btn" onclick="leaveChat()">&larr;</button>
     <div id="chat-title" class="chat-title">Локация</div>
+    <button class="icon-btn" onclick="openCharacterPicker('switch')" title="Сменить персонажа">&#127917;</button>
     <button id="music-btn" class="icon-btn" onclick="toggleMusic()">&#9835;</button>
     <button class="icon-btn" onclick="openSettings()">&#9881;</button>
   </div>
@@ -328,7 +409,10 @@
 var tg = window.Telegram && window.Telegram.WebApp;
 if (tg) { tg.ready(); tg.expand(); }
 
-var screens = { list: 'screen-list', category: 'screen-category', create: 'screen-create', chat: 'screen-chat', settings: 'screen-settings' };
+var screens = {
+  list: 'screen-list', category: 'screen-category', create: 'screen-create', chat: 'screen-chat', settings: 'screen-settings',
+  characters: 'screen-characters', characterEdit: 'screen-character-edit', characterPick: 'screen-character-pick',
+};
 var allClubs = [];
 var currentCategory = null;
 var currentClub = null;
@@ -336,6 +420,15 @@ var lastMessageId = 0;
 var lastEditCheck = '';
 var editingMessageId = null;
 var otherReadId = 0;
+
+var myCharacters = [];
+var activeCharacter = null;
+var characterEditingId = null;
+var characterAvatarFileId = null;
+var pickMode = 'initial';
+var pendingClub = null;
+var pendingOrigin = 'list';
+var characterEditReturnTo = 'characters';
 var pollTimer = null;
 var ytPlayer = null;
 var ytReady = false;
@@ -416,7 +509,7 @@ function openCategory(cat) {
       var card = document.createElement('div');
       card.className = 'club-card';
       card.innerHTML = '<span class="name">' + escapeHtml(c.name) + (c.unread ? ' <span class="unread-dot"></span>' : '') + '</span><span class="arrow">&rarr;</span>';
-      card.onclick = function () { openChat(c, 'category'); };
+      card.onclick = function () { enterLocation(c, 'category'); };
       list.appendChild(card);
     });
   showScreen('category');
@@ -431,8 +524,159 @@ function createClub() {
     .then(function (data) {
       document.getElementById('create-category').value = '';
       document.getElementById('create-name').value = '';
-      openChat(data.club);
+      enterLocation(data.club, 'list');
     }).catch(function (e) { showToast(e.message); });
+}
+
+// ---------- персонажи ----------
+
+function enterLocation(club, origin) {
+  pendingClub = club;
+  pendingOrigin = origin;
+  api('/api/club-character?club_id=' + club.id).then(function (data) {
+    if (data.character) {
+      activeCharacter = data.character;
+      openChat(club, origin);
+    } else {
+      pickMode = 'initial';
+      openCharacterPickScreen();
+    }
+  }).catch(function (e) { showToast(e.message); });
+}
+
+function openCharacterPickScreen() {
+  api('/api/characters').then(function (data) {
+    myCharacters = data.characters;
+    var list = document.getElementById('character-pick-list');
+    var empty = document.getElementById('character-pick-empty');
+    list.innerHTML = '';
+    if (!myCharacters.length) { empty.style.display = 'block'; }
+    else {
+      empty.style.display = 'none';
+      myCharacters.forEach(function (ch) {
+        var card = document.createElement('div');
+        card.className = 'pick-card';
+        card.innerHTML = '<img class="avatar-thumb" src="/api/tg-photo?file_id=' + encodeURIComponent(ch.avatar_file_id) + '">' +
+          '<div class="info"><div class="name">' + escapeHtml(ch.name) + '</div>' +
+          (ch.age ? '<div class="age">' + escapeHtml(ch.age) + '</div>' : '') + '</div>';
+        card.onclick = function () { chooseCharacter(ch); };
+        list.appendChild(card);
+      });
+    }
+    showScreen('characterPick');
+  }).catch(function (e) { showToast(e.message); });
+}
+
+function openCharacterPicker(mode) {
+  pickMode = mode;
+  if (mode === 'switch') { pendingClub = currentClub; pendingOrigin = chatOrigin; }
+  openCharacterPickScreen();
+}
+
+function chooseCharacter(ch) {
+  var club = pendingClub;
+  api('/api/club-character', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ club_id: club.id, character_id: ch.id })
+  }).then(function () {
+    activeCharacter = ch;
+    if (pickMode === 'switch') { showScreen('chat'); }
+    else { openChat(club, pendingOrigin); }
+  }).catch(function (e) { showToast(e.message); });
+}
+
+function cancelCharacterPick() {
+  if (pickMode === 'switch') { showScreen('chat'); }
+  else { showScreen(pendingOrigin === 'category' ? 'category' : 'list'); }
+}
+
+function openCharactersScreen() {
+  api('/api/characters').then(function (data) {
+    myCharacters = data.characters;
+    var list = document.getElementById('characters-list');
+    var empty = document.getElementById('characters-empty');
+    list.innerHTML = '';
+    if (!myCharacters.length) { empty.style.display = 'block'; }
+    else {
+      empty.style.display = 'none';
+      myCharacters.forEach(function (ch) {
+        var card = document.createElement('div');
+        card.className = 'club-card char-card';
+        card.innerHTML = '<img class="avatar-thumb" src="/api/tg-photo?file_id=' + encodeURIComponent(ch.avatar_file_id) + '">' +
+          '<span class="name">' + escapeHtml(ch.name) + '</span><span class="arrow">&rarr;</span>';
+        card.onclick = function () { openCharacterEdit(ch); };
+        list.appendChild(card);
+      });
+    }
+    showScreen('characters');
+  }).catch(function (e) { showToast(e.message); });
+}
+
+function openCharacterEdit(ch, returnTo) {
+  characterEditReturnTo = returnTo || 'characters';
+  characterEditingId = ch ? ch.id : null;
+  characterAvatarFileId = ch ? ch.avatar_file_id : null;
+  document.getElementById('character-edit-title').textContent = ch ? 'Редактирование персонажа' : 'Новый персонаж';
+  document.getElementById('character-name').value = ch ? ch.name : '';
+  document.getElementById('character-age').value = ch ? (ch.age || '') : '';
+  document.getElementById('character-description').value = ch ? (ch.description || '') : '';
+  var preview = document.getElementById('character-avatar-preview');
+  var hint = document.getElementById('character-avatar-hint');
+  if (ch) { preview.src = '/api/tg-photo?file_id=' + encodeURIComponent(ch.avatar_file_id); preview.style.display = 'block'; hint.textContent = 'Заменить фото'; }
+  else { preview.style.display = 'none'; hint.textContent = 'Загрузить фото'; }
+  document.getElementById('character-delete-row').style.display = ch ? 'block' : 'none';
+  showScreen('characterEdit');
+}
+
+function onCharacterAvatarPicked(file) {
+  if (!file) return;
+  showToast('Загружаю фото...');
+  fetch('/api/character-photo', {
+    method: 'POST',
+    headers: { 'Content-Type': file.type || 'image/jpeg', 'X-Tg-Init-Data': (tg && tg.initData) || '' },
+    body: file
+  }).then(function (r) { return r.json().then(function (d) { if (!r.ok) throw new Error(d.error); return d; }); })
+    .then(function (data) {
+      characterAvatarFileId = data.avatar_file_id;
+      var preview = document.getElementById('character-avatar-preview');
+      preview.src = '/api/tg-photo?file_id=' + encodeURIComponent(data.avatar_file_id);
+      preview.style.display = 'block';
+      document.getElementById('character-avatar-hint').textContent = 'Заменить фото';
+      showToast('Фото загружено.');
+    }).catch(function (e) { showToast(e.message); });
+}
+
+function saveCharacter() {
+  var name = document.getElementById('character-name').value.trim();
+  var age = document.getElementById('character-age').value.trim();
+  var description = document.getElementById('character-description').value.trim();
+  if (!name) return showToast('Введите имя.');
+  if (!characterAvatarFileId) return showToast('Загрузите фото.');
+
+  var body = JSON.stringify({ name: name, age: age, description: description, avatar_file_id: characterAvatarFileId });
+  var req = characterEditingId
+    ? api('/api/character?id=' + characterEditingId, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: body })
+    : api('/api/characters', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: body });
+
+  req.then(function () { showToast('Сохранено.'); backFromCharacterEdit(); }).catch(function (e) { showToast(e.message); });
+}
+
+function deleteCharacter() {
+  if (!characterEditingId) return;
+  var id = characterEditingId;
+  var doDelete = function () {
+    api('/api/character?id=' + id, { method: 'DELETE' })
+      .then(function () { showToast('Персонаж удалён.'); openCharactersScreen(); })
+      .catch(function (e) { showToast(e.message); });
+  };
+  var message = 'Удалить этого персонажа? Отправленные им сообщения останутся в чатах.';
+  if (tg && tg.showConfirm) tg.showConfirm(message, function (ok) { if (ok) doDelete(); });
+  else if (window.confirm(message)) doDelete();
+}
+
+function backFromCharacterEdit() {
+  if (characterEditReturnTo === 'pick') openCharacterPickScreen();
+  else openCharactersScreen();
 }
 
 // ---------- чат ----------
@@ -478,6 +722,7 @@ function leaveChat() {
   playbackKeySeen = null;
   cuedVideoId = null;
   currentClub = null;
+  activeCharacter = null;
   api('/api/clubs').then(function (data) {
     allClubs = data.clubs;
     if (chatOrigin === 'category' && currentCategory) { openCategory(currentCategory); }
@@ -505,7 +750,11 @@ function renderMessage(m) {
   var time = new Date(m.created_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
   var editedTag = m.edited_at ? ' <span class="edited-tag">(изменено)</span>' : '';
   var tick = mine ? ' ' + tickHtml(m.id) : '';
-  div.innerHTML = '<div class="who">' + escapeHtml(m.user_name || 'Гость') + '</div>' +
+  var avatarHtml = m.character_avatar_file_id
+    ? '<img class="msg-avatar" src="/api/tg-photo?file_id=' + encodeURIComponent(m.character_avatar_file_id) + '">'
+    : '';
+  var whoLabel = m.character_name || m.user_name || 'Гость';
+  div.innerHTML = '<div class="who">' + avatarHtml + escapeHtml(whoLabel) + '</div>' +
     '<div>' + formatMessageText(m.text) + '</div>' +
     '<div class="msg-time">' + time + editedTag + tick + '</div>';
   if (mine) {
@@ -580,9 +829,11 @@ function sendMessage() {
     return;
   }
 
+  if (!activeCharacter) return showToast('Сначала выберите персонажа.');
   input.value = '';
   api('/api/messages?club_id=' + currentClub.id, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: text })
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text: text, character_id: activeCharacter.id })
   }).then(function () { pollMessages(); }).catch(function (e) { showToast(e.message); });
 }
 document.getElementById('msg-input').addEventListener('keydown', function (e) {
