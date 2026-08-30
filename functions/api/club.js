@@ -45,3 +45,30 @@ export async function onRequestPost(context) {
   }
   return json({ ok: true });
 }
+
+export async function onRequestDelete(context) {
+  const env = context.env;
+  const userId = context.data && context.data.tgUserId;
+  if (!isOwner(env, userId)) return json({ error: "Нет доступа." }, 403);
+
+  const id = new URL(context.request.url).searchParams.get("id");
+  if (!id) return json({ error: "Не указана локация." }, 400);
+
+  const club = await env.DB.prepare("SELECT id FROM clubs WHERE id = ?").bind(id).first();
+  if (!club) return json({ error: "Локация не найдена." }, 404);
+
+  try {
+    await env.DB.batch([
+      env.DB.prepare("DELETE FROM club_playback_ready WHERE club_id = ?").bind(id),
+      env.DB.prepare("DELETE FROM club_playback WHERE club_id = ?").bind(id),
+      env.DB.prepare("DELETE FROM club_messages WHERE club_id = ?").bind(id),
+      env.DB.prepare("DELETE FROM club_members WHERE club_id = ?").bind(id),
+      env.DB.prepare("DELETE FROM clubs WHERE id = ?").bind(id),
+    ]);
+  } catch (e) {
+    console.log("Ошибка удаления локации:", e.message);
+    return json({ error: "Не удалось удалить локацию." }, 500);
+  }
+
+  return json({ ok: true });
+}
