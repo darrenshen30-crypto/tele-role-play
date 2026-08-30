@@ -988,6 +988,7 @@ function sendSmsMessage() {
     var id = smsEditingMessageId;
     input.value = '';
     cancelSmsEdit();
+    input.focus();
     api('/api/sms-message?id=' + id, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: text })
     }).then(function () { pollSmsMessages(); }).catch(function (e) { showToast(e.message); });
@@ -995,12 +996,16 @@ function sendSmsMessage() {
   }
 
   input.value = '';
+  input.focus();
   api('/api/sms-messages?thread_id=' + currentSmsThread.id, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: text })
   }).then(function () { pollSmsMessages(); }).catch(function (e) { showToast(e.message); });
 }
 document.getElementById('sms-msg-input').addEventListener('keydown', function (e) {
   if (e.key === 'Enter') sendSmsMessage();
+});
+document.getElementById('sms-messages').addEventListener('click', function (e) {
+  if (e.target === this) document.getElementById('sms-msg-input').blur();
 });
 
 // ---------- чат ----------
@@ -1156,6 +1161,7 @@ function sendMessage() {
     var id = editingMessageId;
     input.value = '';
     cancelEdit();
+    input.focus();
     api('/api/message?id=' + id, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: text })
     }).then(function () { pollMessages(); }).catch(function (e) { showToast(e.message); });
@@ -1164,6 +1170,7 @@ function sendMessage() {
 
   if (!activeCharacter) return showToast('Сначала выберите персонажа.');
   input.value = '';
+  input.focus();
   api('/api/messages?club_id=' + currentClub.id, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ text: text, character_id: activeCharacter.id })
@@ -1171,6 +1178,9 @@ function sendMessage() {
 }
 document.getElementById('msg-input').addEventListener('keydown', function (e) {
   if (e.key === 'Enter') sendMessage();
+});
+document.getElementById('messages').addEventListener('click', function (e) {
+  if (e.target === this) document.getElementById('msg-input').blur();
 });
 
 // ---------- настройки локации ----------
