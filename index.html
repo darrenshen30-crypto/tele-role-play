@@ -10,7 +10,6 @@
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet" />
 <style>
   :root {
-    --tg-vh: 100vh;
     --bg: #14100e;
     --bg-soft: #1c1613;
     --panel: #241c18;
@@ -99,7 +98,7 @@
   .sms-thread-card .name { font-family: 'Cormorant Garamond', serif; font-size: 20px; color: var(--ink); }
   .sms-thread-card .sub { font-size: 12px; color: var(--ink-soft); }
   #screen-sms-chat {
-    position: relative; height: var(--tg-vh); display: flex; flex-direction: column;
+    position: fixed; inset: 0; min-height: 0; display: flex; flex-direction: column;
     background: #0b0e12;
   }
   .sms-messages { min-height: 0; }
@@ -183,7 +182,7 @@
   .sub-title { font-size: 26px; color: var(--amber-soft); margin: 0 0 18px; }
 
   /* ---- чат ---- */
-  #screen-chat { position: relative; height: var(--tg-vh); }
+  #screen-chat { position: fixed; inset: 0; min-height: 0; }
   .chat-bg {
     position: fixed; inset: 0;
     background-size: cover; background-position: center;
@@ -497,18 +496,10 @@
 
 <script>
 var tg = window.Telegram && window.Telegram.WebApp;
-function syncViewportHeight() {
-  if (tg && tg.viewportHeight) {
-    document.documentElement.style.setProperty('--tg-vh', tg.viewportHeight + 'px');
-  }
-}
 if (tg) {
   tg.ready(); tg.expand();
   if (tg.BackButton) tg.BackButton.onClick(handleTelegramBack);
-  syncViewportHeight();
-  tg.onEvent('viewportChanged', syncViewportHeight);
 }
-window.addEventListener('resize', syncViewportHeight);
 
 var screens = {
   list: 'screen-list', category: 'screen-category', create: 'screen-create', chat: 'screen-chat', settings: 'screen-settings',
@@ -555,6 +546,7 @@ function showScreen(name) {
     document.getElementById(screens[k]).classList.toggle('active', k === name);
   });
   updateTelegramBackButton();
+  window.scrollTo(0, 0);
 }
 
 function updateTelegramBackButton() {
