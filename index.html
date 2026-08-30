@@ -10,6 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet" />
 <style>
   :root {
+    --tg-vh: 100vh;
     --bg: #14100e;
     --bg-soft: #1c1613;
     --panel: #241c18;
@@ -98,7 +99,7 @@
   .sms-thread-card .name { font-family: 'Cormorant Garamond', serif; font-size: 20px; color: var(--ink); }
   .sms-thread-card .sub { font-size: 12px; color: var(--ink-soft); }
   #screen-sms-chat {
-    position: relative; height: 100vh; display: flex; flex-direction: column;
+    position: relative; height: var(--tg-vh); display: flex; flex-direction: column;
     background: #0b0e12;
   }
   .sms-messages { min-height: 0; }
@@ -182,7 +183,7 @@
   .sub-title { font-size: 26px; color: var(--amber-soft); margin: 0 0 18px; }
 
   /* ---- чат ---- */
-  #screen-chat { position: relative; height: 100vh; }
+  #screen-chat { position: relative; height: var(--tg-vh); }
   .chat-bg {
     position: fixed; inset: 0;
     background-size: cover; background-position: center;
@@ -496,7 +497,18 @@
 
 <script>
 var tg = window.Telegram && window.Telegram.WebApp;
-if (tg) { tg.ready(); tg.expand(); if (tg.BackButton) tg.BackButton.onClick(handleTelegramBack); }
+function syncViewportHeight() {
+  if (tg && tg.viewportHeight) {
+    document.documentElement.style.setProperty('--tg-vh', tg.viewportHeight + 'px');
+  }
+}
+if (tg) {
+  tg.ready(); tg.expand();
+  if (tg.BackButton) tg.BackButton.onClick(handleTelegramBack);
+  syncViewportHeight();
+  tg.onEvent('viewportChanged', syncViewportHeight);
+}
+window.addEventListener('resize', syncViewportHeight);
 
 var screens = {
   list: 'screen-list', category: 'screen-category', create: 'screen-create', chat: 'screen-chat', settings: 'screen-settings',
@@ -510,6 +522,7 @@ var lastMessageId = 0;
 var lastEditCheck = '';
 var editingMessageId = null;
 var otherReadId = 0;
+var forceScrollToBottom = false;
 
 var myCharacters = [];
 var activeCharacter = null;
@@ -528,6 +541,7 @@ var smsLastMessageId = 0;
 var smsLastEditCheck = '';
 var smsOtherReadId = 0;
 var smsEditingMessageId = null;
+var smsForceScrollToBottom = false;
 var pollTimer = null;
 var ytPlayer = null;
 var ytReady = false;
@@ -963,12 +977,14 @@ function updateSmsReadTicks() {
 function pollSmsMessages() {
   if (!currentSmsThread) return;
   var isInitialLoad = smsLastMessageId === 0;
+  var forced = smsForceScrollToBottom;
+  smsForceScrollToBottom = false;
   api('/api/sms-messages?thread_id=' + currentSmsThread.id + '&after_id=' + smsLastMessageId + '&after_edit=' + encodeURIComponent(smsLastEditCheck))
     .then(function (data) {
       smsOtherReadId = data.other_read_id || 0;
       if (data.messages.length) {
         var box = document.getElementById('sms-messages');
-        var wasAtBottom = isInitialLoad || (box.scrollHeight - box.scrollTop - box.clientHeight < 60);
+        var wasAtBottom = isInitialLoad || forced || (box.scrollHeight - box.scrollTop - box.clientHeight < 60);
         data.messages.forEach(function (m) {
           var existing = box.querySelector('[data-id="' + m.id + '"]');
           if (existing) existing.replaceWith(renderSmsMessage(m)); else box.appendChild(renderSmsMessage(m));
@@ -976,7 +992,7 @@ function pollSmsMessages() {
           if (m.edited_at && m.edited_at > smsLastEditCheck) smsLastEditCheck = m.edited_at;
         });
         if (wasAtBottom) box.scrollTop = box.scrollHeight;
-        if (isInitialLoad) setTimeout(function () { box.scrollTop = box.scrollHeight; }, 150);
+        if (isInitialLoad || forced) setTimeout(function () { box.scrollTop = box.scrollHeight; }, 150);
         api('/api/sms-read', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ thread_id: currentSmsThread.id, message_id: smsLastMessageId })
@@ -1012,7 +1028,7 @@ function sendSmsMessage() {
     input.focus();
     api('/api/sms-message?id=' + id, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: text })
-    }).then(function () { pollSmsMessages(); }).catch(function (e) { showToast(e.message); });
+    }).then(function () { smsForceScrollToBottom = true; pollSmsMessages(); }).catch(function (e) { showToast(e.message); });
     return;
   }
 
@@ -1020,7 +1036,7 @@ function sendSmsMessage() {
   input.focus();
   api('/api/sms-messages?thread_id=' + currentSmsThread.id, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: text })
-  }).then(function () { pollSmsMessages(); }).catch(function (e) { showToast(e.message); });
+  }).then(function () { smsForceScrollToBottom = true; pollSmsMessages(); }).catch(function (e) { showToast(e.message); });
 }
 document.getElementById('sms-msg-input').addEventListener('keydown', function (e) {
   if (e.key === 'Enter') sendSmsMessage();
@@ -1136,12 +1152,14 @@ function updateReadTicks() {
 function pollMessages() {
   if (!currentClub) return;
   var isInitialLoad = lastMessageId === 0;
+  var forced = forceScrollToBottom;
+  forceScrollToBottom = false;
   api('/api/messages?club_id=' + currentClub.id + '&after_id=' + lastMessageId + '&after_edit=' + encodeURIComponent(lastEditCheck))
     .then(function (data) {
       otherReadId = data.other_read_id || 0;
       if (data.messages.length) {
         var box = document.getElementById('messages');
-        var wasAtBottom = isInitialLoad || (box.scrollHeight - box.scrollTop - box.clientHeight < 60);
+        var wasAtBottom = isInitialLoad || forced || (box.scrollHeight - box.scrollTop - box.clientHeight < 60);
         data.messages.forEach(function (m) {
           var existing = box.querySelector('[data-id="' + m.id + '"]');
           if (existing) existing.replaceWith(renderMessage(m)); else box.appendChild(renderMessage(m));
@@ -1149,7 +1167,7 @@ function pollMessages() {
           if (m.edited_at && m.edited_at > lastEditCheck) lastEditCheck = m.edited_at;
         });
         if (wasAtBottom) box.scrollTop = box.scrollHeight;
-        if (isInitialLoad) setTimeout(function () { box.scrollTop = box.scrollHeight; }, 150);
+        if (isInitialLoad || forced) setTimeout(function () { box.scrollTop = box.scrollHeight; }, 150);
         api('/api/club-read', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ club_id: currentClub.id, message_id: lastMessageId })
@@ -1185,7 +1203,7 @@ function sendMessage() {
     input.focus();
     api('/api/message?id=' + id, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: text })
-    }).then(function () { pollMessages(); }).catch(function (e) { showToast(e.message); });
+    }).then(function () { forceScrollToBottom = true; pollMessages(); }).catch(function (e) { showToast(e.message); });
     return;
   }
 
@@ -1195,7 +1213,7 @@ function sendMessage() {
   api('/api/messages?club_id=' + currentClub.id, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ text: text, character_id: activeCharacter.id })
-  }).then(function () { pollMessages(); }).catch(function (e) { showToast(e.message); });
+  }).then(function () { forceScrollToBottom = true; pollMessages(); }).catch(function (e) { showToast(e.message); });
 }
 document.getElementById('msg-input').addEventListener('keydown', function (e) {
   if (e.key === 'Enter') sendMessage();
