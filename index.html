@@ -761,6 +761,13 @@ function renderMessage(m) {
     div.style.cursor = 'pointer';
     div.onclick = function () { startEditMessage(m); };
   }
+  var avatarImg = div.querySelector('.msg-avatar');
+  if (avatarImg) {
+    avatarImg.onload = function () {
+      var box = document.getElementById('messages');
+      if (box.scrollHeight - box.scrollTop - box.clientHeight < 80) box.scrollTop = box.scrollHeight;
+    };
+  }
   return div;
 }
 
@@ -778,12 +785,13 @@ function updateReadTicks() {
 
 function pollMessages() {
   if (!currentClub) return;
+  var isInitialLoad = lastMessageId === 0;
   api('/api/messages?club_id=' + currentClub.id + '&after_id=' + lastMessageId + '&after_edit=' + encodeURIComponent(lastEditCheck))
     .then(function (data) {
       otherReadId = data.other_read_id || 0;
       if (data.messages.length) {
         var box = document.getElementById('messages');
-        var wasAtBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 60;
+        var wasAtBottom = isInitialLoad || (box.scrollHeight - box.scrollTop - box.clientHeight < 60);
         data.messages.forEach(function (m) {
           var existing = box.querySelector('[data-id="' + m.id + '"]');
           if (existing) existing.replaceWith(renderMessage(m)); else box.appendChild(renderMessage(m));
@@ -791,6 +799,7 @@ function pollMessages() {
           if (m.edited_at && m.edited_at > lastEditCheck) lastEditCheck = m.edited_at;
         });
         if (wasAtBottom) box.scrollTop = box.scrollHeight;
+        if (isInitialLoad) setTimeout(function () { box.scrollTop = box.scrollHeight; }, 150);
         api('/api/club-read', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ club_id: currentClub.id, message_id: lastMessageId })
