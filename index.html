@@ -574,10 +574,31 @@ function escapeHtml(s) {
   });
 }
 
+function ruYears(n) {
+  var n10 = n % 10, n100 = n % 100;
+  if (n10 === 1 && n100 !== 11) return n + ' год';
+  if (n10 >= 2 && n10 <= 4 && (n100 < 10 || n100 >= 20)) return n + ' года';
+  return n + ' лет';
+}
+
+function calculateAge(iso) {
+  var parts = iso.split('-');
+  if (parts.length !== 3) return null;
+  var birth = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+  var today = new Date();
+  var age = today.getFullYear() - birth.getFullYear();
+  var m = today.getMonth() - birth.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+  return age;
+}
+
 function formatBirthdate(iso) {
   if (!iso) return '';
   var parts = iso.split('-');
-  return parts.length === 3 ? parts[2] + '.' + parts[1] + '.' + parts[0] : iso;
+  if (parts.length !== 3) return iso;
+  var display = parts[2] + '.' + parts[1] + '.' + parts[0];
+  var age = calculateAge(iso);
+  return (age !== null && age >= 0) ? display + ' (' + ruYears(age) + ')' : display;
 }
 
 function api(path, options) {
