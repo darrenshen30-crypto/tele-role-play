@@ -53,6 +53,8 @@
   .club-card .name { font-family: 'Cormorant Garamond', serif; font-size: 22px; color: var(--ink); }
   .club-card .arrow { color: var(--amber); font-size: 20px; }
   .club-card .count { color: var(--ink-soft); font-size: 12px; margin-right: 10px; }
+  .unread-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--wine); margin-left: 8px; vertical-align: middle; }
+  .edited-tag { font-style: italic; opacity: 0.8; }
   .empty-hint { text-align: center; color: var(--ink-soft); font-size: 14px; margin: 30px 10px; line-height: 1.6; }
 
   .primary-btn {
@@ -283,6 +285,10 @@
   <div class="chat-body">
     <div id="playback-banner" class="playback-banner"></div>
     <div id="messages" class="messages"></div>
+    <div id="edit-banner" class="playback-banner">
+      <div class="txt">Редактирование сообщения</div>
+      <button class="secondary" onclick="cancelEdit()">Отмена</button>
+    </div>
     <div class="chat-input-row">
       <input id="msg-input" placeholder="Сообщение..." maxlength="4000" />
       <button class="send-btn" onclick="sendMessage()">&#10148;</button>
@@ -325,6 +331,8 @@ var allClubs = [];
 var currentCategory = null;
 var currentClub = null;
 var lastMessageId = 0;
+var lastEditCheck = '';
+var editingMessageId = null;
 var pollTimer = null;
 var ytPlayer = null;
 var ytReady = false;
@@ -385,9 +393,10 @@ function renderCategories() {
   });
 
   order.forEach(function (cat) {
+    var hasUnread = byCategory[cat].some(function (c) { return c.unread; });
     var card = document.createElement('div');
     card.className = 'club-card';
-    card.innerHTML = '<span class="name">' + escapeHtml(cat) + '</span>' +
+    card.innerHTML = '<span class="name">' + escapeHtml(cat) + (hasUnread ? ' <span class="unread-dot"></span>' : '') + '</span>' +
       '<span><span class="count">' + byCategory[cat].length + '</span><span class="arrow">&rarr;</span></span>';
     card.onclick = function () { openCategory(cat); };
     list.appendChild(card);
@@ -403,7 +412,7 @@ function openCategory(cat) {
     .forEach(function (c) {
       var card = document.createElement('div');
       card.className = 'club-card';
-      card.innerHTML = '<span class="name">' + escapeHtml(c.name) + '</span><span class="arrow">&rarr;</span>';
+      card.innerHTML = '<span class="name">' + escapeHtml(c.name) + (c.unread ? ' <span class="unread-dot"></span>' : '') + '</span><span class="arrow">&rarr;</span>';
       card.onclick = function () { openChat(c, 'category'); };
       list.appendChild(card);
     });
@@ -431,6 +440,8 @@ function openChat(club, origin) {
   currentClub = club;
   chatOrigin = origin || 'list';
   lastMessageId = 0;
+  lastEditCheck = '';
+  cancelEdit();
   document.getElementById('messages').innerHTML = '';
   document.getElementById('chat-title').textContent = club.name;
   applyBackground(club);
@@ -459,6 +470,7 @@ function applyBackground(club) {
 function leaveChat() {
   if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
   stopLocalPlayback();
+  cancelEdit();
   playbackKeySeen = null;
   cuedVideoId = null;
   currentClub = null;
@@ -470,39 +482,79 @@ function leaveChat() {
 }
 
 function formatMessageText(text) {
-  return escapeHtml(text).replace(/\*([^*\n]+)\*/g, '<b>$1</b>');
+  var html = escapeHtml(text);
+  html = html.replace(/\*([^*\n]+)\*/g, '<b>$1</b>');
+  html = html.replace(/_([^_\n]+)_/g, '<i>$1</i>');
+  return html;
 }
 
 function renderMessage(m) {
   var mine = tg && tg.initDataUnsafe && tg.initDataUnsafe.user && String(tg.initDataUnsafe.user.id) === String(m.user_id);
   var div = document.createElement('div');
   div.className = 'msg ' + (mine ? 'mine' : 'theirs');
+  div.dataset.id = m.id;
   var time = new Date(m.created_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+  var editedTag = m.edited_at ? ' <span class="edited-tag">(изменено)</span>' : '';
   div.innerHTML = '<div class="who">' + escapeHtml(m.user_name || 'Гость') + '</div>' +
     '<div>' + formatMessageText(m.text) + '</div>' +
-    '<div class="msg-time">' + time + '</div>';
+    '<div class="msg-time">' + time + editedTag + '</div>';
+  if (mine) {
+    div.style.cursor = 'pointer';
+    div.onclick = function () { startEditMessage(m); };
+  }
   return div;
 }
 
 function pollMessages() {
   if (!currentClub) return;
-  api('/api/messages?club_id=' + currentClub.id + '&after_id=' + lastMessageId)
+  api('/api/messages?club_id=' + currentClub.id + '&after_id=' + lastMessageId + '&after_edit=' + encodeURIComponent(lastEditCheck))
     .then(function (data) {
       if (!data.messages.length) return;
       var box = document.getElementById('messages');
       var wasAtBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 60;
       data.messages.forEach(function (m) {
-        box.appendChild(renderMessage(m));
+        var existing = box.querySelector('[data-id="' + m.id + '"]');
+        if (existing) existing.replaceWith(renderMessage(m)); else box.appendChild(renderMessage(m));
         lastMessageId = Math.max(lastMessageId, m.id);
+        if (m.edited_at && m.edited_at > lastEditCheck) lastEditCheck = m.edited_at;
       });
       if (wasAtBottom) box.scrollTop = box.scrollHeight;
+      api('/api/club-read', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ club_id: currentClub.id, message_id: lastMessageId })
+      }).catch(function () {});
     }).catch(function () {});
+}
+
+function startEditMessage(m) {
+  editingMessageId = m.id;
+  var input = document.getElementById('msg-input');
+  input.value = m.text;
+  input.focus();
+  document.getElementById('edit-banner').classList.add('show');
+}
+
+function cancelEdit() {
+  editingMessageId = null;
+  document.getElementById('msg-input').value = '';
+  document.getElementById('edit-banner').classList.remove('show');
 }
 
 function sendMessage() {
   var input = document.getElementById('msg-input');
   var text = input.value.trim();
   if (!text || !currentClub) return;
+
+  if (editingMessageId) {
+    var id = editingMessageId;
+    input.value = '';
+    cancelEdit();
+    api('/api/message?id=' + id, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: text })
+    }).then(function () { pollMessages(); }).catch(function (e) { showToast(e.message); });
+    return;
+  }
+
   input.value = '';
   api('/api/messages?club_id=' + currentClub.id, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: text })

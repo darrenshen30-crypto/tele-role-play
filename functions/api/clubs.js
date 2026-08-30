@@ -18,11 +18,28 @@ export async function onRequestGet(context) {
   if (!isOwner(env, userId)) return json({ error: "Нет доступа." }, 403);
 
   const { results } = await env.DB.prepare(
-    "SELECT id, name, category, background_file_id, background_updated_at, music_url, owner_id " +
-      "FROM clubs ORDER BY category, name"
-  ).all();
+    "SELECT c.id, c.name, c.category, c.background_file_id, c.background_updated_at, c.music_url, c.owner_id, " +
+      "lm.id AS last_message_id, lm.user_id AS last_message_user_id, " +
+      "COALESCE(r.last_read_message_id, 0) AS last_read_message_id " +
+      "FROM clubs c " +
+      "LEFT JOIN (SELECT club_id, MAX(id) AS id FROM club_messages GROUP BY club_id) lmid ON lmid.club_id = c.id " +
+      "LEFT JOIN club_messages lm ON lm.id = lmid.id " +
+      "LEFT JOIN club_reads r ON r.club_id = c.id AND r.user_id = ? " +
+      "ORDER BY c.category, c.name"
+  ).bind(String(userId)).all();
 
-  return json({ clubs: results || [] });
+  const clubs = (results || []).map(function (row) {
+    const unread = !!row.last_message_id &&
+      String(row.last_message_user_id) !== String(userId) &&
+      row.last_message_id > row.last_read_message_id;
+    return {
+      id: row.id, name: row.name, category: row.category,
+      background_file_id: row.background_file_id, background_updated_at: row.background_updated_at,
+      music_url: row.music_url, owner_id: row.owner_id, unread: unread,
+    };
+  });
+
+  return json({ clubs: clubs });
 }
 
 export async function onRequestPost(context) {
@@ -47,5 +64,5 @@ export async function onRequestPost(context) {
     return json({ error: "Не удалось создать локацию." }, 500);
   }
 
-  return json({ club: club });
+  return json({ club: Object.assign({ unread: false }, club) });
 }
