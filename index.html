@@ -230,6 +230,34 @@
   .msg.mine .who { display: none; }
   .msg-time { font-size: 10px; opacity: 0.6; margin-top: 3px; text-align: right; }
 
+  .ooc-note {
+    display: block;
+    border-left: 3px solid var(--wine);
+    background: rgba(122,34,51,0.16);
+    border-radius: 6px;
+    padding: 6px 9px;
+    font-style: italic;
+  }
+  .msg.mine .ooc-note { background: rgba(122,34,51,0.14); }
+
+  .attention-banner {
+    position: relative; z-index: 2;
+    display: none;
+    align-items: center; gap: 10px;
+    padding: 10px 14px;
+    background: rgba(122,34,51,0.85);
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+  .attention-banner.show { display: flex; }
+  .attention-bar { width: 3px; align-self: stretch; border-radius: 2px; background: var(--amber); flex-shrink: 0; }
+  .attention-text { flex: 1; min-width: 0; }
+  .attention-title { font-weight: 700; font-size: 13.5px; color: #fff; }
+  .attention-sub { font-size: 12px; color: rgba(255,255,255,0.85); margin-top: 1px; }
+  .attention-close {
+    background: transparent; border: none; color: #fff;
+    font-size: 22px; line-height: 1; padding: 2px 6px; flex-shrink: 0;
+  }
+
   .playback-banner {
     position: relative; z-index: 2;
     display: none;
@@ -455,6 +483,14 @@
     <button class="icon-btn" onclick="openSettings()">&#9881;</button>
   </div>
   <div class="chat-body">
+    <div id="attention-banner" class="attention-banner">
+      <div class="attention-bar"></div>
+      <div class="attention-text">
+        <div class="attention-title">Внимание!</div>
+        <div class="attention-sub">Ваш ответ может повлиять на реакцию персонажа.</div>
+      </div>
+      <button class="attention-close" onclick="dismissAttention()">&times;</button>
+    </div>
     <div id="playback-banner" class="playback-banner"></div>
     <div id="messages" class="messages"></div>
     <div id="edit-banner" class="playback-banner">
@@ -513,6 +549,7 @@ var lastMessageId = 0;
 var lastEditCheck = '';
 var editingMessageId = null;
 var otherReadId = 0;
+var attentionId = 0;
 var forceScrollToBottom = false;
 
 var myCharacters = [];
@@ -1047,6 +1084,8 @@ function openChat(club, origin) {
   lastMessageId = 0;
   lastEditCheck = '';
   otherReadId = 0;
+  attentionId = 0;
+  document.getElementById('attention-banner').classList.remove('show');
   cancelEdit();
   document.getElementById('messages').innerHTML = '';
   document.getElementById('chat-title').textContent = club.name;
@@ -1081,6 +1120,8 @@ function leaveChat() {
   cuedVideoId = null;
   currentClub = null;
   activeCharacter = null;
+  attentionId = 0;
+  document.getElementById('attention-banner').classList.remove('show');
   api('/api/clubs').then(function (data) {
     allClubs = data.clubs;
     if (chatOrigin === 'category' && currentCategory) { openCategory(currentCategory); }
@@ -1112,8 +1153,11 @@ function renderMessage(m) {
     ? '<img class="msg-avatar" src="/api/tg-photo?file_id=' + encodeURIComponent(m.character_avatar_file_id) + '">'
     : '';
   var whoLabel = m.character_name || m.user_name || 'Гость';
+  var bodyHtml = m.is_attention
+    ? '<div class="ooc-note">&#9888; ' + formatMessageText(m.text.slice(1, -1)) + '</div>'
+    : formatMessageText(m.text);
   div.innerHTML = '<div class="who">' + avatarHtml + escapeHtml(whoLabel) + '</div>' +
-    '<div>' + formatMessageText(m.text) + '</div>' +
+    '<div>' + bodyHtml + '</div>' +
     '<div class="msg-time">' + time + editedTag + tick + '</div>';
   if (mine) {
     div.style.cursor = 'pointer';
@@ -1141,6 +1185,22 @@ function updateReadTicks() {
   }
 }
 
+function updateAttentionBanner(id) {
+  attentionId = id || 0;
+  document.getElementById('attention-banner').classList.toggle('show', attentionId > 0);
+}
+
+function dismissAttention() {
+  document.getElementById('attention-banner').classList.remove('show');
+  if (!currentClub || !attentionId) return;
+  var id = attentionId;
+  attentionId = 0;
+  api('/api/club-attention-dismiss', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ club_id: currentClub.id, message_id: id })
+  }).catch(function () {});
+}
+
 function pollMessages() {
   if (!currentClub) return;
   var isInitialLoad = lastMessageId === 0;
@@ -1149,6 +1209,7 @@ function pollMessages() {
   api('/api/messages?club_id=' + currentClub.id + '&after_id=' + lastMessageId + '&after_edit=' + encodeURIComponent(lastEditCheck))
     .then(function (data) {
       otherReadId = data.other_read_id || 0;
+      updateAttentionBanner(data.attention_id);
       if (data.messages.length) {
         var box = document.getElementById('messages');
         var wasAtBottom = isInitialLoad || forced || (box.scrollHeight - box.scrollTop - box.clientHeight < 60);

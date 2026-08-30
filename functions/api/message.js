@@ -11,6 +11,10 @@ function isOwner(env, id) {
   return ids.indexOf(String(id)) !== -1;
 }
 
+function isAttentionText(text) {
+  return text.length >= 3 && text[0] === "#" && text[text.length - 1] === "#";
+}
+
 export async function onRequestPatch(context) {
   const env = context.env;
   const userId = context.data && context.data.tgUserId;
@@ -31,12 +35,13 @@ export async function onRequestPatch(context) {
   }
 
   const editedAt = new Date().toISOString();
+  const isAttention = isAttentionText(text) ? 1 : 0;
   let updated = null;
   try {
     updated = await env.DB.prepare(
-      "UPDATE club_messages SET text = ?, edited_at = ? WHERE id = ? " +
-        "RETURNING id, user_id, user_name, text, created_at, edited_at, character_name, character_avatar_file_id"
-    ).bind(text, editedAt, id).first();
+      "UPDATE club_messages SET text = ?, edited_at = ?, is_attention = ? WHERE id = ? " +
+        "RETURNING id, user_id, user_name, text, created_at, edited_at, character_name, character_avatar_file_id, is_attention"
+    ).bind(text, editedAt, isAttention, id).first();
   } catch (e) {
     console.log("Ошибка редактирования сообщения:", e.message);
     return json({ error: "Не удалось отредактировать сообщение." }, 500);

@@ -14,6 +14,11 @@ function isOwner(env, id) {
   return ids.indexOf(String(id)) !== -1;
 }
 
+// Сообщение целиком в # ... # - пометка "это может повлиять на реакцию персонажа".
+function isAttentionText(text) {
+  return text.length >= 3 && text[0] === "#" && text[text.length - 1] === "#";
+}
+
 export async function onRequestGet(context) {
   const env = context.env;
   const userId = context.data && context.data.tgUserId;
@@ -26,7 +31,7 @@ export async function onRequestGet(context) {
   if (!clubId) return json({ error: "Не указана локация." }, 400);
 
   const { results } = await env.DB.prepare(
-    "SELECT id, user_id, user_name, text, created_at, edited_at, character_name, character_avatar_file_id " +
+    "SELECT id, user_id, user_name, text, created_at, edited_at, character_name, character_avatar_file_id, is_attention " +
       "FROM club_messages WHERE club_id = ? AND (id > ? OR (edited_at IS NOT NULL AND edited_at > ?)) ORDER BY id ASC LIMIT 200"
   ).bind(clubId, afterId, afterEdit).all();
 
@@ -34,7 +39,17 @@ export async function onRequestGet(context) {
     "SELECT MIN(last_read_message_id) AS v FROM club_reads WHERE club_id = ? AND user_id != ?"
   ).bind(clubId, String(userId)).first();
 
-  return json({ messages: results || [], other_read_id: (otherRead && otherRead.v != null) ? otherRead.v : 0 });
+  const attention = await env.DB.prepare(
+    "SELECT MAX(cm.id) AS v FROM club_messages cm LEFT JOIN club_attention_dismissed cad " +
+      "ON cad.club_id = cm.club_id AND cad.user_id = ? " +
+      "WHERE cm.club_id = ? AND cm.user_id != ? AND cm.is_attention = 1 AND cm.id > COALESCE(cad.last_dismissed_id, 0)"
+  ).bind(String(userId), clubId, String(userId)).first();
+
+  return json({
+    messages: results || [],
+    other_read_id: (otherRead && otherRead.v != null) ? otherRead.v : 0,
+    attention_id: (attention && attention.v != null) ? attention.v : 0,
+  });
 }
 
 export async function onRequestPost(context) {
@@ -59,13 +74,15 @@ export async function onRequestPost(context) {
     return json({ error: "Это не ваш персонаж." }, 403);
   }
 
+  const isAttention = isAttentionText(text) ? 1 : 0;
+
   let message = null;
   try {
     message = await env.DB.prepare(
-      "INSERT INTO club_messages (club_id, user_id, user_name, text, character_id, character_name, character_avatar_file_id) " +
-        "VALUES (?, ?, ?, ?, ?, ?, ?) " +
-        "RETURNING id, user_id, user_name, text, created_at, edited_at, character_name, character_avatar_file_id"
-    ).bind(clubId, String(userId), userName || null, text, character.id, character.name, character.avatar_file_id).first();
+      "INSERT INTO club_messages (club_id, user_id, user_name, text, character_id, character_name, character_avatar_file_id, is_attention) " +
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?) " +
+        "RETURNING id, user_id, user_name, text, created_at, edited_at, character_name, character_avatar_file_id, is_attention"
+    ).bind(clubId, String(userId), userName || null, text, character.id, character.name, character.avatar_file_id, isAttention).first();
   } catch (e) {
     console.log("Ошибка отправки сообщения:", e.message);
     return json({ error: "Не удалось отправить сообщение." }, 500);
