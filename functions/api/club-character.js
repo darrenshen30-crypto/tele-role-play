@@ -20,7 +20,7 @@ export async function onRequestGet(context) {
   if (!clubId) return json({ error: "Не указана локация." }, 400);
 
   const row = await env.DB.prepare(
-    "SELECT ch.id, ch.name, ch.age, ch.description, ch.avatar_file_id " +
+    "SELECT ch.id, ch.name, ch.birthdate, ch.description, ch.avatar_file_id " +
       "FROM club_character_choice cc JOIN characters ch ON ch.id = cc.character_id " +
       "WHERE cc.club_id = ? AND cc.user_id = ? AND ch.owner_id = ?"
   ).bind(clubId, String(userId), String(userId)).first();

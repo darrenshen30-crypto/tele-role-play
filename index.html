@@ -83,7 +83,7 @@
   }
   .pick-card .info { flex: 1; }
   .pick-card .name { font-family: 'Cormorant Garamond', serif; font-size: 20px; color: var(--ink); }
-  .pick-card .age { font-size: 12px; color: var(--ink-soft); }
+  .pick-card .birthdate { font-size: 12px; color: var(--ink-soft); }
   .pick-card.selected { border-color: var(--amber); box-shadow: 0 0 0 1px var(--amber) inset; }
 
   /* ---- SMS ---- */
@@ -98,9 +98,10 @@
   .sms-thread-card .name { font-family: 'Cormorant Garamond', serif; font-size: 20px; color: var(--ink); }
   .sms-thread-card .sub { font-size: 12px; color: var(--ink-soft); }
   #screen-sms-chat {
-    position: relative; min-height: 100vh; display: flex; flex-direction: column;
+    position: relative; height: 100vh; display: flex; flex-direction: column;
     background: #0b0e12;
   }
+  .sms-messages { min-height: 0; }
   .sms-top {
     display: flex; align-items: center; gap: 10px; padding: 14px;
     border-bottom: 1px solid rgba(255,255,255,0.08); background: #10141a;
@@ -110,6 +111,7 @@
   .sms-subtitle { font-size: 11px; color: var(--ink-soft); }
   .sms-messages { flex: 1; overflow-y: auto; padding: 16px 14px; display: flex; flex-direction: column; gap: 8px; }
   .sms-msg { max-width: 78%; padding: 9px 13px; border-radius: 18px; font-size: 15px; line-height: 1.35; color: #fff; }
+  .sms-msg .who { display: flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; opacity: 0.9; margin-bottom: 3px; }
   .sms-msg.mine { align-self: flex-end; background: #0a84ff; border-bottom-right-radius: 5px; }
   .sms-msg.theirs { align-self: flex-start; background: #2fbe4e; border-bottom-left-radius: 5px; }
   .sms-msg .msg-time { font-size: 10px; opacity: 0.85; margin-top: 3px; text-align: right; }
@@ -180,7 +182,7 @@
   .sub-title { font-size: 26px; color: var(--amber-soft); margin: 0 0 18px; }
 
   /* ---- чат ---- */
-  #screen-chat { position: relative; min-height: 100vh; }
+  #screen-chat { position: relative; height: 100vh; }
   .chat-bg {
     position: fixed; inset: 0;
     background-size: cover; background-position: center;
@@ -372,8 +374,8 @@
 
   <div class="field-label">Имя</div>
   <input id="character-name" class="field-input" placeholder="Имя персонажа" maxlength="60" />
-  <div class="field-label">Возраст</div>
-  <input id="character-age" class="field-input" placeholder="Например, 27" maxlength="20" />
+  <div class="field-label">Дата рождения</div>
+  <input id="character-birthdate" class="field-input" type="date" />
   <div class="field-label">Краткое описание</div>
   <textarea id="character-description" class="textarea-input" placeholder="Пара слов о персонаже" maxlength="500"></textarea>
 
@@ -550,6 +552,12 @@ function escapeHtml(s) {
   });
 }
 
+function formatBirthdate(iso) {
+  if (!iso) return '';
+  var parts = iso.split('-');
+  return parts.length === 3 ? parts[2] + '.' + parts[1] + '.' + parts[0] : iso;
+}
+
 function api(path, options) {
   options = options || {};
   options.headers = Object.assign({ 'X-Tg-Init-Data': (tg && tg.initData) || '' }, options.headers || {});
@@ -655,7 +663,7 @@ function openCharacterPickScreen() {
         card.className = 'pick-card';
         card.innerHTML = '<img class="avatar-thumb" src="/api/tg-photo?file_id=' + encodeURIComponent(ch.avatar_file_id) + '">' +
           '<div class="info"><div class="name">' + escapeHtml(ch.name) + '</div>' +
-          (ch.age ? '<div class="age">' + escapeHtml(ch.age) + '</div>' : '') + '</div>';
+          (ch.birthdate ? '<div class="birthdate">' + escapeHtml(formatBirthdate(ch.birthdate)) + '</div>' : '') + '</div>';
         card.onclick = function () { chooseCharacter(ch); };
         list.appendChild(card);
       });
@@ -715,7 +723,7 @@ function openCharacterEdit(ch, returnTo) {
   characterAvatarFileId = ch ? ch.avatar_file_id : null;
   document.getElementById('character-edit-title').textContent = ch ? 'Редактирование персонажа' : 'Новый персонаж';
   document.getElementById('character-name').value = ch ? ch.name : '';
-  document.getElementById('character-age').value = ch ? (ch.age || '') : '';
+  document.getElementById('character-birthdate').value = ch ? (ch.birthdate || '') : '';
   document.getElementById('character-description').value = ch ? (ch.description || '') : '';
   var preview = document.getElementById('character-avatar-preview');
   var hint = document.getElementById('character-avatar-hint');
@@ -745,12 +753,12 @@ function onCharacterAvatarPicked(file) {
 
 function saveCharacter() {
   var name = document.getElementById('character-name').value.trim();
-  var age = document.getElementById('character-age').value.trim();
+  var birthdate = document.getElementById('character-birthdate').value.trim();
   var description = document.getElementById('character-description').value.trim();
   if (!name) return showToast('Введите имя.');
   if (!characterAvatarFileId) return showToast('Загрузите фото.');
 
-  var body = JSON.stringify({ name: name, age: age, description: description, avatar_file_id: characterAvatarFileId });
+  var body = JSON.stringify({ name: name, birthdate: birthdate, description: description, avatar_file_id: characterAvatarFileId });
   var req = characterEditingId
     ? api('/api/character?id=' + characterEditingId, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: body })
     : api('/api/characters', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: body });
@@ -827,7 +835,7 @@ function renderSmsCharacterPickList(containerId, list, which) {
     card.className = 'pick-card';
     card.innerHTML = '<img class="avatar-thumb" src="/api/tg-photo?file_id=' + encodeURIComponent(ch.avatar_file_id) + '">' +
       '<div class="info"><div class="name">' + escapeHtml(ch.name) + '</div>' +
-      (ch.age ? '<div class="age">' + escapeHtml(ch.age) + '</div>' : '') + '</div>';
+      (ch.birthdate ? '<div class="birthdate">' + escapeHtml(formatBirthdate(ch.birthdate)) + '</div>' : '') + '</div>';
     card.onclick = function () {
       if (which === 'mine') smsSelectedMineId = ch.id; else smsSelectedOtherId = ch.id;
       var siblings = el.querySelectorAll('.pick-card');
@@ -884,7 +892,11 @@ function renderSmsMessage(m) {
   var time = new Date(m.created_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
   var editedTag = m.edited_at ? ' <span class="edited-tag">(изменено)</span>' : '';
   var tick = mine ? ' ' + smsTickHtml(m.id) : '';
-  div.innerHTML = '<div>' + formatMessageText(m.text) + '</div>' +
+  var avatarHtml = m.character_avatar_file_id
+    ? '<img class="msg-avatar" src="/api/tg-photo?file_id=' + encodeURIComponent(m.character_avatar_file_id) + '">'
+    : '';
+  var whoHtml = m.character_name ? '<div class="who">' + avatarHtml + escapeHtml(m.character_name) + '</div>' : '';
+  div.innerHTML = whoHtml + '<div>' + formatMessageText(m.text) + '</div>' +
     '<div class="msg-time">' + time + editedTag + tick + '</div>';
   if (mine) {
     div.style.cursor = 'pointer';

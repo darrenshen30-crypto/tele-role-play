@@ -25,7 +25,7 @@ export async function onRequestPatch(context) {
 
   const body = await context.request.json();
   const name = (body.name || "").trim();
-  const age = (body.age || "").trim();
+  const birthdate = (body.birthdate || "").trim();
   const description = (body.description || "").trim();
   const avatarFileId = (body.avatar_file_id || "").trim() || existing.avatar_file_id;
   if (!name) return json({ error: "Введите имя персонажа." }, 400);
@@ -33,9 +33,9 @@ export async function onRequestPatch(context) {
   let character = null;
   try {
     character = await env.DB.prepare(
-      "UPDATE characters SET name = ?, age = ?, description = ?, avatar_file_id = ? WHERE id = ? " +
-        "RETURNING id, name, age, description, avatar_file_id"
-    ).bind(name, age || null, description || null, avatarFileId, id).first();
+      "UPDATE characters SET name = ?, birthdate = ?, description = ?, avatar_file_id = ? WHERE id = ? " +
+        "RETURNING id, name, birthdate, description, avatar_file_id"
+    ).bind(name, birthdate || null, description || null, avatarFileId, id).first();
   } catch (e) {
     console.log("Ошибка редактирования персонажа:", e.message);
     return json({ error: "Не удалось сохранить персонажа." }, 500);

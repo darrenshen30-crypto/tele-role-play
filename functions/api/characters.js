@@ -18,7 +18,7 @@ export async function onRequestGet(context) {
   if (!isOwner(env, userId)) return json({ error: "Нет доступа." }, 403);
 
   const { results } = await env.DB.prepare(
-    "SELECT id, name, age, description, avatar_file_id FROM characters WHERE owner_id = ? ORDER BY created_at"
+    "SELECT id, name, birthdate, description, avatar_file_id FROM characters WHERE owner_id = ? ORDER BY created_at"
   ).bind(String(userId)).all();
 
   return json({ characters: results || [] });
@@ -31,7 +31,7 @@ export async function onRequestPost(context) {
 
   const body = await context.request.json();
   const name = (body.name || "").trim();
-  const age = (body.age || "").trim();
+  const birthdate = (body.birthdate || "").trim();
   const description = (body.description || "").trim();
   const avatarFileId = (body.avatar_file_id || "").trim();
   if (!name) return json({ error: "Введите имя персонажа." }, 400);
@@ -40,9 +40,9 @@ export async function onRequestPost(context) {
   let character = null;
   try {
     character = await env.DB.prepare(
-      "INSERT INTO characters (owner_id, name, age, description, avatar_file_id) VALUES (?, ?, ?, ?, ?) " +
-        "RETURNING id, name, age, description, avatar_file_id"
-    ).bind(String(userId), name, age || null, description || null, avatarFileId).first();
+      "INSERT INTO characters (owner_id, name, birthdate, description, avatar_file_id) VALUES (?, ?, ?, ?, ?) " +
+        "RETURNING id, name, birthdate, description, avatar_file_id"
+    ).bind(String(userId), name, birthdate || null, description || null, avatarFileId).first();
   } catch (e) {
     console.log("Ошибка создания персонажа:", e.message);
     return json({ error: "Не удалось создать персонажа." }, 500);

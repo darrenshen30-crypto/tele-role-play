@@ -18,7 +18,7 @@ export async function onRequestGet(context) {
   if (!isOwner(env, userId)) return json({ error: "Нет доступа." }, 403);
 
   const { results } = await env.DB.prepare(
-    "SELECT id, name, age, avatar_file_id FROM characters WHERE owner_id != ? ORDER BY created_at"
+    "SELECT id, name, birthdate, avatar_file_id FROM characters WHERE owner_id != ? ORDER BY created_at"
   ).bind(String(userId)).all();
 
   return json({ characters: results || [] });
