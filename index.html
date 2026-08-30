@@ -496,7 +496,7 @@
 
 <script>
 var tg = window.Telegram && window.Telegram.WebApp;
-if (tg) { tg.ready(); tg.expand(); }
+if (tg) { tg.ready(); tg.expand(); if (tg.BackButton) tg.BackButton.onClick(handleTelegramBack); }
 
 var screens = {
   list: 'screen-list', category: 'screen-category', create: 'screen-create', chat: 'screen-chat', settings: 'screen-settings',
@@ -533,10 +533,32 @@ var ytPlayer = null;
 var ytReady = false;
 var musicOn = false;
 
+var currentScreenName = 'list';
+
 function showScreen(name) {
+  currentScreenName = name;
   Object.keys(screens).forEach(function (k) {
     document.getElementById(screens[k]).classList.toggle('active', k === name);
   });
+  updateTelegramBackButton();
+}
+
+function updateTelegramBackButton() {
+  if (!tg || !tg.BackButton) return;
+  if (currentScreenName === 'list') tg.BackButton.hide(); else tg.BackButton.show();
+}
+
+function handleTelegramBack() {
+  switch (currentScreenName) {
+    case 'category': case 'create': case 'characters': case 'sms': showScreen('list'); break;
+    case 'characterEdit': backFromCharacterEdit(); break;
+    case 'characterPick': cancelCharacterPick(); break;
+    case 'smsNew': showScreen('sms'); break;
+    case 'settings': showScreen('chat'); break;
+    case 'chat': leaveChat(); break;
+    case 'smsChat': leaveSmsChat(); break;
+    default: showScreen('list');
+  }
 }
 
 function showToast(text) {
