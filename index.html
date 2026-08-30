@@ -84,6 +84,46 @@
   .pick-card .info { flex: 1; }
   .pick-card .name { font-family: 'Cormorant Garamond', serif; font-size: 20px; color: var(--ink); }
   .pick-card .age { font-size: 12px; color: var(--ink-soft); }
+  .pick-card.selected { border-color: var(--amber); box-shadow: 0 0 0 1px var(--amber) inset; }
+
+  /* ---- SMS ---- */
+  #screen-sms, #screen-sms-new { padding: 24px 20px 60px; }
+  .sms-thread-card {
+    background: linear-gradient(180deg, var(--panel), var(--bg-soft));
+    border: 1px solid var(--line); border-radius: 14px;
+    padding: 12px 16px; margin-bottom: 12px;
+    display: flex; align-items: center; cursor: pointer;
+  }
+  .sms-thread-card .info { flex: 1; }
+  .sms-thread-card .name { font-family: 'Cormorant Garamond', serif; font-size: 20px; color: var(--ink); }
+  .sms-thread-card .sub { font-size: 12px; color: var(--ink-soft); }
+  #screen-sms-chat {
+    position: relative; min-height: 100vh; display: flex; flex-direction: column;
+    background: #0b0e12;
+  }
+  .sms-top {
+    display: flex; align-items: center; gap: 10px; padding: 14px;
+    border-bottom: 1px solid rgba(255,255,255,0.08); background: #10141a;
+  }
+  .sms-title-wrap { flex: 1; overflow: hidden; }
+  .sms-title { font-family: 'Cormorant Garamond', serif; font-size: 20px; color: var(--ink); white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
+  .sms-subtitle { font-size: 11px; color: var(--ink-soft); }
+  .sms-messages { flex: 1; overflow-y: auto; padding: 16px 14px; display: flex; flex-direction: column; gap: 8px; }
+  .sms-msg { max-width: 78%; padding: 9px 13px; border-radius: 18px; font-size: 15px; line-height: 1.35; color: #fff; }
+  .sms-msg.mine { align-self: flex-end; background: #0a84ff; border-bottom-right-radius: 5px; }
+  .sms-msg.theirs { align-self: flex-start; background: #2fbe4e; border-bottom-left-radius: 5px; }
+  .sms-msg .msg-time { font-size: 10px; opacity: 0.85; margin-top: 3px; text-align: right; }
+  .sms-msg .tick { opacity: 0.85; }
+  .sms-msg .tick.read { opacity: 1; color: #fff; }
+  .sms-input-row {
+    display: flex; gap: 8px; padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+    background: #10141a; border-top: 1px solid rgba(255,255,255,0.08);
+  }
+  .sms-input-row input {
+    flex: 1; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 20px; padding: 11px 16px; color: var(--ink); font-size: 14.5px;
+  }
+  .sms-input-row input:focus { outline: none; border-color: var(--amber); }
   .tick { margin-left: 4px; opacity: 0.7; }
   .tick.read { opacity: 1; color: var(--amber-soft); }
   .empty-hint { text-align: center; color: var(--ink-soft); font-size: 14px; margin: 30px 10px; line-height: 1.6; }
@@ -286,6 +326,7 @@
   <div class="btn-row">
     <button class="primary-btn" onclick="showScreen('create')">+ Создать локацию</button>
     <button class="ghost-btn" onclick="openCharactersScreen()">Мои персонажи</button>
+    <button class="ghost-btn" onclick="openSmsListScreen()">SMS</button>
   </div>
 </div>
 
@@ -356,6 +397,52 @@
   </div>
 </div>
 
+<div id="screen-sms" class="screen sub-screen">
+  <span class="back-link" onclick="showScreen('list')">&larr; Назад</span>
+  <div class="sub-title">SMS</div>
+  <div id="sms-threads-list"></div>
+  <div id="sms-threads-empty" class="empty-hint" style="display:none;">
+    Переписок пока нет.<br />Начните новую.
+  </div>
+  <div class="btn-row">
+    <button class="primary-btn" onclick="openSmsNewScreen()">+ Написать SMS</button>
+  </div>
+</div>
+
+<div id="screen-sms-new" class="screen sub-screen">
+  <span class="back-link" onclick="showScreen('sms')">&larr; Назад</span>
+  <div class="sub-title">Новая переписка</div>
+
+  <div class="field-label">От кого (ваш персонаж)</div>
+  <div id="sms-my-characters"></div>
+
+  <div class="field-label">Кому (персонаж собеседника)</div>
+  <div id="sms-other-characters"></div>
+
+  <div class="btn-row">
+    <button class="primary-btn" onclick="startSmsThread()">Начать переписку</button>
+  </div>
+</div>
+
+<div id="screen-sms-chat" class="screen">
+  <div class="sms-top">
+    <button class="icon-btn" onclick="leaveSmsChat()">&larr;</button>
+    <div class="sms-title-wrap">
+      <div id="sms-chat-title" class="sms-title">Собеседник</div>
+      <div id="sms-chat-subtitle" class="sms-subtitle">от лица...</div>
+    </div>
+  </div>
+  <div id="sms-messages" class="sms-messages"></div>
+  <div id="sms-edit-banner" class="playback-banner">
+    <div class="txt">Редактирование сообщения</div>
+    <button class="secondary" onclick="cancelSmsEdit()">Отмена</button>
+  </div>
+  <div class="sms-input-row">
+    <input id="sms-msg-input" placeholder="Сообщение..." maxlength="4000" />
+    <button class="send-btn" onclick="sendSmsMessage()">&#10148;</button>
+  </div>
+</div>
+
 <div id="screen-chat" class="screen">
   <div id="chat-bg" class="chat-bg"></div>
   <div class="chat-top">
@@ -412,6 +499,7 @@ if (tg) { tg.ready(); tg.expand(); }
 var screens = {
   list: 'screen-list', category: 'screen-category', create: 'screen-create', chat: 'screen-chat', settings: 'screen-settings',
   characters: 'screen-characters', characterEdit: 'screen-character-edit', characterPick: 'screen-character-pick',
+  sms: 'screen-sms', smsNew: 'screen-sms-new', smsChat: 'screen-sms-chat',
 };
 var allClubs = [];
 var currentCategory = null;
@@ -429,6 +517,15 @@ var pickMode = 'initial';
 var pendingClub = null;
 var pendingOrigin = 'list';
 var characterEditReturnTo = 'characters';
+
+var smsSelectedMineId = null;
+var smsSelectedOtherId = null;
+var currentSmsThread = null;
+var smsPollTimer = null;
+var smsLastMessageId = 0;
+var smsLastEditCheck = '';
+var smsOtherReadId = 0;
+var smsEditingMessageId = null;
 var pollTimer = null;
 var ytPlayer = null;
 var ytReady = false;
@@ -678,6 +775,199 @@ function backFromCharacterEdit() {
   if (characterEditReturnTo === 'pick') openCharacterPickScreen();
   else openCharactersScreen();
 }
+
+// ---------- SMS: личные сообщения между персонажами ----------
+
+function openSmsListScreen() {
+  api('/api/sms-threads').then(function (data) {
+    var list = document.getElementById('sms-threads-list');
+    var empty = document.getElementById('sms-threads-empty');
+    list.innerHTML = '';
+    if (!data.threads.length) { empty.style.display = 'block'; }
+    else {
+      empty.style.display = 'none';
+      data.threads.forEach(function (t) {
+        var card = document.createElement('div');
+        card.className = 'sms-thread-card';
+        card.innerHTML = '<img class="avatar-thumb" src="/api/tg-photo?file_id=' + encodeURIComponent(t.other_character.avatar_file_id) + '">' +
+          '<div class="info"><div class="name">' + escapeHtml(t.other_character.name) +
+          (t.unread ? ' <span class="unread-dot"></span>' : '') + '</div>' +
+          '<div class="sub">от лица ' + escapeHtml(t.my_character.name) + '</div></div>' +
+          '<span class="arrow">&rarr;</span>';
+        card.onclick = function () { openSmsChat(t.id, t.my_character, t.other_character); };
+        list.appendChild(card);
+      });
+    }
+    showScreen('sms');
+  }).catch(function (e) { showToast(e.message); });
+}
+
+function openSmsNewScreen() {
+  smsSelectedMineId = null;
+  smsSelectedOtherId = null;
+  Promise.all([api('/api/characters'), api('/api/other-characters')]).then(function (results) {
+    renderSmsCharacterPickList('sms-my-characters', results[0].characters, 'mine');
+    renderSmsCharacterPickList('sms-other-characters', results[1].characters, 'other');
+    showScreen('smsNew');
+  }).catch(function (e) { showToast(e.message); });
+}
+
+function renderSmsCharacterPickList(containerId, list, which) {
+  var el = document.getElementById(containerId);
+  el.innerHTML = '';
+  if (!list.length) {
+    var hint = document.createElement('div');
+    hint.className = 'empty-hint';
+    hint.textContent = which === 'mine' ? 'Сначала создайте своего персонажа.' : 'У второго человека пока нет персонажей.';
+    el.appendChild(hint);
+    return;
+  }
+  list.forEach(function (ch) {
+    var card = document.createElement('div');
+    card.className = 'pick-card';
+    card.innerHTML = '<img class="avatar-thumb" src="/api/tg-photo?file_id=' + encodeURIComponent(ch.avatar_file_id) + '">' +
+      '<div class="info"><div class="name">' + escapeHtml(ch.name) + '</div>' +
+      (ch.age ? '<div class="age">' + escapeHtml(ch.age) + '</div>' : '') + '</div>';
+    card.onclick = function () {
+      if (which === 'mine') smsSelectedMineId = ch.id; else smsSelectedOtherId = ch.id;
+      var siblings = el.querySelectorAll('.pick-card');
+      for (var i = 0; i < siblings.length; i++) siblings[i].classList.remove('selected');
+      card.classList.add('selected');
+    };
+    el.appendChild(card);
+  });
+}
+
+function startSmsThread() {
+  if (!smsSelectedMineId) return showToast('Выберите своего персонажа.');
+  if (!smsSelectedOtherId) return showToast('Выберите персонажа собеседника.');
+  api('/api/sms-threads', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ my_character_id: smsSelectedMineId, other_character_id: smsSelectedOtherId })
+  }).then(function (data) {
+    openSmsChat(data.thread_id, data.my_character, data.other_character);
+  }).catch(function (e) { showToast(e.message); });
+}
+
+function openSmsChat(threadId, myCharacter, otherCharacter) {
+  currentSmsThread = { id: threadId, mine: myCharacter, other: otherCharacter };
+  smsLastMessageId = 0;
+  smsLastEditCheck = '';
+  smsOtherReadId = 0;
+  cancelSmsEdit();
+  document.getElementById('sms-messages').innerHTML = '';
+  document.getElementById('sms-chat-title').textContent = otherCharacter.name;
+  document.getElementById('sms-chat-subtitle').textContent = 'от лица ' + myCharacter.name;
+  showScreen('smsChat');
+  pollSmsMessages();
+  if (smsPollTimer) clearInterval(smsPollTimer);
+  smsPollTimer = setInterval(pollSmsMessages, 2500);
+}
+
+function leaveSmsChat() {
+  if (smsPollTimer) { clearInterval(smsPollTimer); smsPollTimer = null; }
+  cancelSmsEdit();
+  currentSmsThread = null;
+  openSmsListScreen();
+}
+
+function smsTickHtml(messageId) {
+  var read = messageId <= smsOtherReadId;
+  return '<span class="tick' + (read ? ' read' : '') + '">' + (read ? '✓✓' : '✓') + '</span>';
+}
+
+function renderSmsMessage(m) {
+  var mine = tg && tg.initDataUnsafe && tg.initDataUnsafe.user && String(tg.initDataUnsafe.user.id) === String(m.sender_user_id);
+  var div = document.createElement('div');
+  div.className = 'sms-msg ' + (mine ? 'mine' : 'theirs');
+  div.dataset.id = m.id;
+  var time = new Date(m.created_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+  var editedTag = m.edited_at ? ' <span class="edited-tag">(изменено)</span>' : '';
+  var tick = mine ? ' ' + smsTickHtml(m.id) : '';
+  div.innerHTML = '<div>' + formatMessageText(m.text) + '</div>' +
+    '<div class="msg-time">' + time + editedTag + tick + '</div>';
+  if (mine) {
+    div.style.cursor = 'pointer';
+    div.onclick = function () { startSmsEditMessage(m); };
+  }
+  return div;
+}
+
+function updateSmsReadTicks() {
+  var nodes = document.querySelectorAll('#sms-messages .sms-msg.mine');
+  for (var i = 0; i < nodes.length; i++) {
+    var el = nodes[i];
+    var span = el.querySelector('.tick');
+    if (!span) continue;
+    var read = Number(el.dataset.id) <= smsOtherReadId;
+    span.className = 'tick' + (read ? ' read' : '');
+    span.textContent = read ? '✓✓' : '✓';
+  }
+}
+
+function pollSmsMessages() {
+  if (!currentSmsThread) return;
+  var isInitialLoad = smsLastMessageId === 0;
+  api('/api/sms-messages?thread_id=' + currentSmsThread.id + '&after_id=' + smsLastMessageId + '&after_edit=' + encodeURIComponent(smsLastEditCheck))
+    .then(function (data) {
+      smsOtherReadId = data.other_read_id || 0;
+      if (data.messages.length) {
+        var box = document.getElementById('sms-messages');
+        var wasAtBottom = isInitialLoad || (box.scrollHeight - box.scrollTop - box.clientHeight < 60);
+        data.messages.forEach(function (m) {
+          var existing = box.querySelector('[data-id="' + m.id + '"]');
+          if (existing) existing.replaceWith(renderSmsMessage(m)); else box.appendChild(renderSmsMessage(m));
+          smsLastMessageId = Math.max(smsLastMessageId, m.id);
+          if (m.edited_at && m.edited_at > smsLastEditCheck) smsLastEditCheck = m.edited_at;
+        });
+        if (wasAtBottom) box.scrollTop = box.scrollHeight;
+        if (isInitialLoad) setTimeout(function () { box.scrollTop = box.scrollHeight; }, 150);
+        api('/api/sms-read', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ thread_id: currentSmsThread.id, message_id: smsLastMessageId })
+        }).catch(function () {});
+      }
+      updateSmsReadTicks();
+    }).catch(function () {});
+}
+
+function startSmsEditMessage(m) {
+  smsEditingMessageId = m.id;
+  var input = document.getElementById('sms-msg-input');
+  input.value = m.text;
+  input.focus();
+  document.getElementById('sms-edit-banner').classList.add('show');
+}
+
+function cancelSmsEdit() {
+  smsEditingMessageId = null;
+  document.getElementById('sms-msg-input').value = '';
+  document.getElementById('sms-edit-banner').classList.remove('show');
+}
+
+function sendSmsMessage() {
+  var input = document.getElementById('sms-msg-input');
+  var text = input.value.trim();
+  if (!text || !currentSmsThread) return;
+
+  if (smsEditingMessageId) {
+    var id = smsEditingMessageId;
+    input.value = '';
+    cancelSmsEdit();
+    api('/api/sms-message?id=' + id, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: text })
+    }).then(function () { pollSmsMessages(); }).catch(function (e) { showToast(e.message); });
+    return;
+  }
+
+  input.value = '';
+  api('/api/sms-messages?thread_id=' + currentSmsThread.id, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: text })
+  }).then(function () { pollSmsMessages(); }).catch(function (e) { showToast(e.message); });
+}
+document.getElementById('sms-msg-input').addEventListener('keydown', function (e) {
+  if (e.key === 'Enter') sendSmsMessage();
+});
 
 // ---------- чат ----------
 
