@@ -1614,6 +1614,7 @@ function pollMessages() {
 
 function startEditMessage(m) {
   editingMessageId = m.id;
+  removeAttachedPhoto();
   var input = document.getElementById('msg-input');
   input.value = m.text;
   input.focus();
