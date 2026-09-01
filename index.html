@@ -479,6 +479,17 @@
   </div>
 </div>
 
+<div id="screen-character-view" class="screen sub-screen">
+  <span class="back-link" onclick="showScreen('chat')">&larr; Назад</span>
+  <div style="text-align:center;">
+    <img id="character-view-avatar" class="avatar-upload-preview" />
+    <div id="character-view-name" class="sub-title" style="margin-bottom:2px;"></div>
+    <div id="character-view-birthdate" class="list-sub" style="margin-bottom:18px;"></div>
+  </div>
+  <div class="field-label">Описание</div>
+  <div id="character-view-description" style="color:var(--ink); font-size:15px; line-height:1.5; white-space:pre-wrap;"></div>
+</div>
+
 <div id="screen-sms" class="screen sub-screen">
   <span class="back-link" onclick="showScreen('list')">&larr; Назад</span>
   <div class="sub-title">SMS</div>
@@ -602,6 +613,7 @@ if (tg) {
 var screens = {
   list: 'screen-list', category: 'screen-category', create: 'screen-create', chat: 'screen-chat', settings: 'screen-settings',
   characters: 'screen-characters', characterEdit: 'screen-character-edit', characterPick: 'screen-character-pick',
+  characterView: 'screen-character-view',
   sms: 'screen-sms', smsNew: 'screen-sms-new', smsChat: 'screen-sms-chat',
 };
 var allClubs = [];
@@ -659,6 +671,7 @@ function handleTelegramBack() {
     case 'category': case 'create': case 'characters': case 'sms': showScreen('list'); break;
     case 'characterEdit': backFromCharacterEdit(); break;
     case 'characterPick': cancelCharacterPick(); break;
+    case 'characterView': showScreen('chat'); break;
     case 'smsNew': showScreen('sms'); break;
     case 'settings': showScreen('chat'); break;
     case 'chat': leaveChat(); break;
@@ -880,6 +893,20 @@ function genderLabel(g) {
 
 function genderBadge(g) {
   return g ? '<span class="gender-badge ' + g + '">' + genderLabel(g) + '</span>' : '';
+}
+
+function openCharacterView(id) {
+  api('/api/character-view?id=' + id).then(function (data) {
+    var ch = data.character;
+    if (!ch) return showToast('Персонаж не найден.');
+    document.getElementById('character-view-avatar').src = '/api/tg-photo?file_id=' + encodeURIComponent(ch.avatar_file_id);
+    document.getElementById('character-view-name').innerHTML = escapeHtml(ch.name) + genderBadge(ch.gender);
+    var birthdateEl = document.getElementById('character-view-birthdate');
+    birthdateEl.textContent = ch.birthdate ? formatBirthdate(ch.birthdate) : '';
+    birthdateEl.style.display = ch.birthdate ? 'block' : 'none';
+    document.getElementById('character-view-description').textContent = ch.description || 'Без описания.';
+    showScreen('characterView');
+  }).catch(function (e) { showToast(e.message); });
 }
 
 function openCharacterEdit(ch, returnTo) {
@@ -1253,6 +1280,14 @@ function renderMessage(m) {
   if (mine) {
     div.style.cursor = 'pointer';
     div.onclick = function () { startEditMessage(m); };
+  }
+  var whoEl = div.querySelector('.who');
+  if (whoEl && m.character_id) {
+    whoEl.style.cursor = 'pointer';
+    whoEl.onclick = function (e) {
+      e.stopPropagation();
+      openCharacterView(m.character_id);
+    };
   }
   var avatarImg = div.querySelector('.msg-avatar');
   if (avatarImg) {

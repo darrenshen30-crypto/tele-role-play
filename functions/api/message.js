@@ -40,7 +40,7 @@ export async function onRequestPatch(context) {
   try {
     updated = await env.DB.prepare(
       "UPDATE club_messages SET text = ?, edited_at = ?, is_attention = ? WHERE id = ? " +
-        "RETURNING id, user_id, user_name, text, created_at, edited_at, character_name, character_avatar_file_id, is_attention"
+        "RETURNING id, user_id, user_name, text, created_at, edited_at, character_id, character_name, character_avatar_file_id, is_attention"
     ).bind(text, editedAt, isAttention, id).first();
   } catch (e) {
     console.log("Ошибка редактирования сообщения:", e.message);

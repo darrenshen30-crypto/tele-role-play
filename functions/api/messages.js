@@ -31,7 +31,7 @@ export async function onRequestGet(context) {
   if (!clubId) return json({ error: "Не указана локация." }, 400);
 
   const { results } = await env.DB.prepare(
-    "SELECT id, user_id, user_name, text, created_at, edited_at, character_name, character_avatar_file_id, is_attention " +
+    "SELECT id, user_id, user_name, text, created_at, edited_at, character_id, character_name, character_avatar_file_id, is_attention " +
       "FROM club_messages WHERE club_id = ? AND (id > ? OR (edited_at IS NOT NULL AND edited_at > ?)) ORDER BY id ASC LIMIT 200"
   ).bind(clubId, afterId, afterEdit).all();
 
@@ -81,7 +81,7 @@ export async function onRequestPost(context) {
     message = await env.DB.prepare(
       "INSERT INTO club_messages (club_id, user_id, user_name, text, character_id, character_name, character_avatar_file_id, is_attention) " +
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?) " +
-        "RETURNING id, user_id, user_name, text, created_at, edited_at, character_name, character_avatar_file_id, is_attention"
+        "RETURNING id, user_id, user_name, text, created_at, edited_at, character_id, character_name, character_avatar_file_id, is_attention"
     ).bind(clubId, String(userId), userName || null, text, character.id, character.name, character.avatar_file_id, isAttention).first();
   } catch (e) {
     console.log("Ошибка отправки сообщения:", e.message);
