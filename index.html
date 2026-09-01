@@ -723,6 +723,7 @@ var pollTimer = null;
 var ytPlayer = null;
 var ytReady = false;
 var musicOn = false;
+var clubsPollTimer = null;
 
 var currentScreenName = 'list';
 
@@ -732,7 +733,30 @@ function showScreen(name) {
     document.getElementById(screens[k]).classList.toggle('active', k === name);
   });
   updateTelegramBackButton();
+  updateClubsPolling();
   window.scrollTo(0, 0);
+}
+
+// Пока человек сидит на списке локаций/категории (не зашёл в саму комнату),
+// обновляем список в фоне - иначе точка "есть непрочитанное" появляется только
+// после выхода и повторного захода в мини-апп.
+function updateClubsPolling() {
+  var shouldPoll = currentScreenName === 'list' || currentScreenName === 'category';
+  if (shouldPoll && !clubsPollTimer) {
+    pollClubsQuiet();
+    clubsPollTimer = setInterval(pollClubsQuiet, 6000);
+  } else if (!shouldPoll && clubsPollTimer) {
+    clearInterval(clubsPollTimer);
+    clubsPollTimer = null;
+  }
+}
+
+function pollClubsQuiet() {
+  api('/api/clubs').then(function (data) {
+    allClubs = data.clubs;
+    if (currentScreenName === 'category' && currentCategory) { openCategory(currentCategory); }
+    else { renderCategories(); }
+  }).catch(function () {});
 }
 
 function updateTelegramBackButton() {
@@ -1447,7 +1471,7 @@ function renderMessage(m) {
   var bodyHtml = m.is_attention
     ? '<div class="ooc-note">&#9888; ' + formatMessageText(m.text.slice(1, -1)) + '</div>'
     : formatMessageText(m.text);
-  div.innerHTML = '<div class="who">' + avatarHtml + escapeHtml(whoLabel) + '</div>' +
+  div.innerHTML = '<div class="who">' + avatarHtml + escapeHtml(whoLabel) + genderBadge(m.character_gender) + '</div>' +
     '<div>' + bodyHtml + '</div>' +
     '<div class="msg-time">' + time + editedTag + tick + '</div>';
   if (mine) {
@@ -1814,7 +1838,6 @@ function pollPlayback() {
 
 function init() {
   showScreen('list');
-  loadClubs();
   loadUsersList();
 }
 init();

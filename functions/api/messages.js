@@ -71,8 +71,10 @@ export async function onRequestGet(context) {
   if (!clubId) return json({ error: "Не указана локация." }, 400);
 
   const { results } = await env.DB.prepare(
-    "SELECT id, user_id, user_name, text, created_at, edited_at, character_id, character_name, character_avatar_file_id, is_attention " +
-      "FROM club_messages WHERE club_id = ? AND (id > ? OR (edited_at IS NOT NULL AND edited_at > ?)) ORDER BY id ASC LIMIT 200"
+    "SELECT cm.id, cm.user_id, cm.user_name, cm.text, cm.created_at, cm.edited_at, cm.character_id, cm.character_name, " +
+      "cm.character_avatar_file_id, cm.is_attention, ch.gender AS character_gender " +
+      "FROM club_messages cm LEFT JOIN characters ch ON ch.id = cm.character_id " +
+      "WHERE cm.club_id = ? AND (cm.id > ? OR (cm.edited_at IS NOT NULL AND cm.edited_at > ?)) ORDER BY cm.id ASC LIMIT 200"
   ).bind(clubId, afterId, afterEdit).all();
 
   const otherRead = await env.DB.prepare(
@@ -108,7 +110,7 @@ export async function onRequestPost(context) {
   if (text.length > 4000) return json({ error: "Слишком длинное сообщение." }, 400);
   if (!characterId) return json({ error: "Сначала выберите персонажа." }, 400);
 
-  const character = await env.DB.prepare("SELECT id, owner_id, name, avatar_file_id FROM characters WHERE id = ?")
+  const character = await env.DB.prepare("SELECT id, owner_id, name, avatar_file_id, gender FROM characters WHERE id = ?")
     .bind(characterId).first();
   if (!character || String(character.owner_id) !== String(userId)) {
     return json({ error: "Это не ваш персонаж." }, 403);
@@ -127,6 +129,7 @@ export async function onRequestPost(context) {
     console.log("Ошибка отправки сообщения:", e.message);
     return json({ error: "Не удалось отправить сообщение." }, 500);
   }
+  message.character_gender = character.gender;
 
   context.waitUntil(notifyRecipients(env, clubId, userId, message.id));
 

@@ -46,5 +46,11 @@ export async function onRequestPatch(context) {
     console.log("Ошибка редактирования сообщения:", e.message);
     return json({ error: "Не удалось отредактировать сообщение." }, 500);
   }
+
+  if (updated.character_id) {
+    const character = await env.DB.prepare("SELECT gender FROM characters WHERE id = ?").bind(updated.character_id).first();
+    updated.character_gender = character ? character.gender : null;
+  }
+
   return json({ message: updated });
 }
