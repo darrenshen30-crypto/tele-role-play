@@ -242,6 +242,17 @@
   }
   .field-input:focus { outline: none; border-color: var(--amber); }
 
+  /* ---- дата рождения тремя выпадающими списками вместо <input type="date">, -
+     нативное окошко выбора даты в Telegram WebView иногда рисуется шире экрана ---- */
+  .birthdate-pick { display: flex; gap: 8px; }
+  .birthdate-pick select {
+    flex: 1; min-width: 0; text-align: center; text-align-last: center;
+    background: var(--bg-soft); border: 1px solid var(--line); border-radius: 10px;
+    padding: 13px 4px; color: var(--ink); font-size: 14.5px; font-family: inherit;
+  }
+  .birthdate-pick select.bp-month { flex: 1.7; }
+  .birthdate-pick select:focus { outline: none; border-color: var(--amber); }
+
   /* ---- создание / вход по коду ---- */
   .sub-screen { padding: 24px 20px; }
   .back-link { color: var(--ink-soft); font-size: 14px; margin-bottom: 18px; display: inline-block; cursor: pointer; }
@@ -508,7 +519,11 @@
     <button type="button" class="gender-opt gamma" data-gender="gamma" onclick="pickGender('gamma')">&#9893; Гамма</button>
   </div>
   <div class="field-label">Дата рождения</div>
-  <input id="character-birthdate" class="field-input" type="date" />
+  <div class="birthdate-pick">
+    <select id="character-birthdate-day" class="bp-day"></select>
+    <select id="character-birthdate-month" class="bp-month"></select>
+    <select id="character-birthdate-year" class="bp-year"></select>
+  </div>
   <div class="field-label">Краткое описание</div>
   <textarea id="character-description" class="textarea-input" placeholder="Пара слов о персонаже" maxlength="500"></textarea>
 
@@ -1042,6 +1057,39 @@ function leaveCharacterView() {
   showScreen(characterViewReturnTo);
 }
 
+function pad2(n) { return n < 10 ? '0' + n : String(n); }
+
+function populateBirthdateSelects() {
+  var daySel = document.getElementById('character-birthdate-day');
+  if (daySel.options.length) return;
+  daySel.innerHTML = '<option value="">День</option>';
+  for (var d = 1; d <= 31; d++) daySel.innerHTML += '<option value="' + pad2(d) + '">' + d + '</option>';
+
+  var monthSel = document.getElementById('character-birthdate-month');
+  var months = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
+  monthSel.innerHTML = '<option value="">Месяц</option>';
+  months.forEach(function (name, i) { monthSel.innerHTML += '<option value="' + pad2(i + 1) + '">' + name + '</option>'; });
+
+  var yearSel = document.getElementById('character-birthdate-year');
+  var thisYear = new Date().getFullYear();
+  yearSel.innerHTML = '<option value="">Год</option>';
+  for (var y = thisYear; y >= thisYear - 100; y--) yearSel.innerHTML += '<option value="' + y + '">' + y + '</option>';
+}
+
+function setBirthdateSelects(iso) {
+  var parts = (iso || '').split('-');
+  document.getElementById('character-birthdate-year').value = parts[0] || '';
+  document.getElementById('character-birthdate-month').value = parts[1] || '';
+  document.getElementById('character-birthdate-day').value = parts[2] || '';
+}
+
+function getBirthdateValue() {
+  var y = document.getElementById('character-birthdate-year').value;
+  var m = document.getElementById('character-birthdate-month').value;
+  var d = document.getElementById('character-birthdate-day').value;
+  return (y && m && d) ? (y + '-' + m + '-' + d) : '';
+}
+
 function openCharacterEdit(ch, returnTo) {
   characterEditReturnTo = returnTo || 'characters';
   characterEditingId = ch ? ch.id : null;
@@ -1049,7 +1097,8 @@ function openCharacterEdit(ch, returnTo) {
   editingGender = null;
   document.getElementById('character-edit-title').textContent = ch ? 'Редактирование персонажа' : 'Новый персонаж';
   document.getElementById('character-name').value = ch ? ch.name : '';
-  document.getElementById('character-birthdate').value = ch ? (ch.birthdate || '') : '';
+  populateBirthdateSelects();
+  setBirthdateSelects(ch ? ch.birthdate : '');
   document.getElementById('character-description').value = ch ? (ch.description || '') : '';
   pickGender(ch && ch.gender ? ch.gender : null);
   var preview = document.getElementById('character-avatar-preview');
@@ -1080,7 +1129,7 @@ function onCharacterAvatarPicked(file) {
 
 function saveCharacter() {
   var name = document.getElementById('character-name').value.trim();
-  var birthdate = document.getElementById('character-birthdate').value.trim();
+  var birthdate = getBirthdateValue();
   var description = document.getElementById('character-description').value.trim();
   if (!name) return showToast('Введите имя.');
   if (!characterAvatarFileId) return showToast('Загрузите фото.');
