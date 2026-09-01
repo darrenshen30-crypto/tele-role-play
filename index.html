@@ -118,6 +118,36 @@
     background: #0b0e12;
   }
   .sms-messages { min-height: 0; }
+
+  /* ---- имитация экрана телефона над перепиской ---- */
+  .sms-statusbar {
+    position: relative;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: calc(8px + env(safe-area-inset-top)) 22px 6px;
+    background: #0b0e12; color: #fff;
+    font-size: 14px; font-weight: 600; flex-shrink: 0;
+  }
+  .sms-notch {
+    position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+    width: 34%; max-width: 150px; height: 22px;
+    background: #000; border-radius: 0 0 16px 16px;
+  }
+  .sms-time { position: relative; z-index: 1; }
+  .sms-status-icons { position: relative; z-index: 1; display: flex; align-items: center; gap: 5px; }
+  .sms-status-icons svg { fill: #fff; display: block; }
+  .sms-batt { display: flex; align-items: center; gap: 1px; }
+  .sms-batt-body {
+    width: 21px; height: 11px; border: 1px solid rgba(255,255,255,0.7);
+    border-radius: 3px; padding: 1.5px; box-sizing: border-box; display: flex;
+  }
+  .sms-batt-fill { display: block; width: 80%; height: 100%; background: #fff; border-radius: 1px; }
+  .sms-batt-nub { width: 2px; height: 4px; background: rgba(255,255,255,0.7); border-radius: 0 2px 2px 0; }
+  .sms-home-indicator {
+    background: #0b0e12; padding: 6px 0 calc(6px + env(safe-area-inset-bottom));
+    display: flex; justify-content: center; flex-shrink: 0;
+  }
+  .sms-home-indicator span { width: 120px; height: 4px; border-radius: 3px; background: rgba(255,255,255,0.6); display: block; }
+
   .sms-top {
     display: flex; align-items: center; gap: 10px; padding: 14px;
     border-bottom: 1px solid rgba(255,255,255,0.08); background: #10141a;
@@ -477,6 +507,15 @@
 </div>
 
 <div id="screen-sms-chat" class="screen">
+  <div class="sms-statusbar">
+    <div class="sms-notch"></div>
+    <span class="sms-time" id="sms-status-time">9:41</span>
+    <span class="sms-status-icons">
+      <svg viewBox="0 0 18 12" width="18" height="12"><rect x="0" y="7" width="3" height="5" rx="0.5"/><rect x="5" y="5" width="3" height="7" rx="0.5"/><rect x="10" y="3" width="3" height="9" rx="0.5"/><rect x="15" y="0" width="3" height="12" rx="0.5"/></svg>
+      <svg viewBox="0 0 16 12" width="16" height="12"><path d="M8 10.2a1.2 1.2 0 1 1 0-2.4 1.2 1.2 0 0 1 0 2.4zM4.6 6.9a4.8 4.8 0 0 1 6.8 0l-1.3 1.3a2.9 2.9 0 0 0-4.2 0zM2 4.3a8.4 8.4 0 0 1 12 0L12.7 5.6a6.5 6.5 0 0 0-9.4 0z"/></svg>
+      <span class="sms-batt"><span class="sms-batt-body"><span class="sms-batt-fill"></span></span><span class="sms-batt-nub"></span></span>
+    </span>
+  </div>
   <div class="sms-top">
     <button class="icon-btn" onclick="leaveSmsChat()">&larr;</button>
     <div class="sms-title-wrap">
@@ -493,6 +532,7 @@
     <input id="sms-msg-input" placeholder="Сообщение..." maxlength="4000" />
     <button class="send-btn" onclick="sendSmsMessage()">&#10148;</button>
   </div>
+  <div class="sms-home-indicator"><span></span></div>
 </div>
 
 <div id="screen-chat" class="screen">
@@ -984,6 +1024,15 @@ function startSmsThread() {
   }).catch(function (e) { showToast(e.message); });
 }
 
+function updateSmsStatusTime() {
+  var el = document.getElementById('sms-status-time');
+  if (!el) return;
+  var d = new Date();
+  var h = d.getHours();
+  var m = d.getMinutes();
+  el.textContent = h + ':' + (m < 10 ? '0' : '') + m;
+}
+
 function openSmsChat(threadId, myCharacter, otherCharacter) {
   currentSmsThread = { id: threadId, mine: myCharacter, other: otherCharacter };
   smsLastMessageId = 0;
@@ -994,9 +1043,10 @@ function openSmsChat(threadId, myCharacter, otherCharacter) {
   document.getElementById('sms-chat-title').textContent = otherCharacter.name;
   document.getElementById('sms-chat-subtitle').textContent = 'от лица ' + myCharacter.name;
   showScreen('smsChat');
+  updateSmsStatusTime();
   pollSmsMessages();
   if (smsPollTimer) clearInterval(smsPollTimer);
-  smsPollTimer = setInterval(pollSmsMessages, 2500);
+  smsPollTimer = setInterval(function () { pollSmsMessages(); updateSmsStatusTime(); }, 2500);
 }
 
 function leaveSmsChat() {
