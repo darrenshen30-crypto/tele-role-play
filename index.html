@@ -307,6 +307,18 @@
   .msg.mine .who { color: #241a10; }
   .msg-time { font-size: 10px; opacity: 0.6; margin-top: 3px; text-align: right; }
 
+  /* ---- фото в сообщении, с опцией "скрыть до нажатия" ---- */
+  .msg-photo-wrap { position: relative; display: block; margin-bottom: 6px; border-radius: 10px; overflow: hidden; cursor: pointer; }
+  .msg-photo-wrap img { display: block; width: 100%; max-height: 320px; object-fit: cover; transition: filter 0.2s; }
+  .msg-photo-wrap.blurred img { filter: blur(28px); transform: scale(1.05); }
+  .msg-photo-reveal-hint {
+    display: none; position: absolute; inset: 0; align-items: center; justify-content: center;
+    flex-direction: column; gap: 4px; color: #fff; font-size: 13px; font-weight: 700;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.7); background: rgba(0,0,0,0.25);
+  }
+  .msg-photo-wrap.blurred .msg-photo-reveal-hint { display: flex; }
+  .msg-photo-reveal-hint .eye { font-size: 22px; }
+
   .ooc-note {
     display: block;
     background: rgba(122,34,51,0.16);
@@ -388,6 +400,24 @@
     width: 42px; height: 42px;
     font-size: 17px;
     flex-shrink: 0;
+  }
+  .attach-btn { cursor: pointer; }
+
+  .photo-attach-preview {
+    position: relative; z-index: 2;
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 12px;
+    background: rgba(20,16,14,0.7);
+    border-top: 1px solid rgba(255,255,255,0.08);
+  }
+  .photo-attach-thumb { width: 42px; height: 42px; border-radius: 8px; object-fit: cover; flex-shrink: 0; }
+  .photo-attach-blur {
+    flex: 1; display: flex; align-items: center; gap: 6px;
+    font-size: 13px; color: var(--ink); cursor: pointer;
+  }
+  .photo-attach-remove {
+    background: transparent; border: none; color: var(--ink-soft);
+    font-size: 20px; line-height: 1; padding: 2px 6px; flex-shrink: 0; cursor: pointer;
   }
 
   /* ---- настройки локации ---- */
@@ -628,7 +658,19 @@
       <div class="txt">Редактирование сообщения</div>
       <button class="secondary" onclick="cancelEdit()">Отмена</button>
     </div>
+    <div id="photo-attach-preview" class="photo-attach-preview" style="display:none;">
+      <img id="photo-attach-thumb" class="photo-attach-thumb" />
+      <label class="photo-attach-blur">
+        <input type="checkbox" id="photo-attach-blur-check" />
+        Скрыть до нажатия
+      </label>
+      <button type="button" class="photo-attach-remove" onclick="removeAttachedPhoto()">&times;</button>
+    </div>
     <div class="chat-input-row">
+      <label class="icon-btn attach-btn">
+        &#128206;
+        <input type="file" id="msg-photo-input" accept="image/*" style="display:none;" onchange="onMessagePhotoPicked(this.files[0])" />
+      </label>
       <input id="msg-input" placeholder="Сообщение..." maxlength="4000" />
       <button class="send-btn" onclick="sendMessage()">&#10148;</button>
     </div>
@@ -696,6 +738,7 @@ var currentClub = null;
 var lastMessageId = 0;
 var lastEditCheck = '';
 var editingMessageId = null;
+var pendingPhotoFileId = null;
 var otherReadId = 0;
 var attentionId = 0;
 var forceScrollToBottom = false;
@@ -1471,8 +1514,17 @@ function renderMessage(m) {
   var bodyHtml = m.is_attention
     ? '<div class="ooc-note">&#9888; ' + formatMessageText(m.text.slice(1, -1)) + '</div>'
     : formatMessageText(m.text);
+  var photoHtml = '';
+  if (m.photo_file_id) {
+    var isBlurred = !!m.photo_blurred && !m.photo_revealed;
+    photoHtml = '<div class="msg-photo-wrap' + (isBlurred ? ' blurred' : '') + '">' +
+      '<img class="msg-photo" src="/api/tg-photo?file_id=' + encodeURIComponent(m.photo_file_id) + '">' +
+      (isBlurred ? '<div class="msg-photo-reveal-hint"><span class="eye">&#128065;</span>Нажмите, чтобы посмотреть</div>' : '') +
+      '</div>';
+  }
+  var textHtml = m.text ? ('<div>' + bodyHtml + '</div>') : '';
   div.innerHTML = '<div class="who">' + avatarHtml + escapeHtml(whoLabel) + genderBadge(m.character_gender) + '</div>' +
-    '<div>' + bodyHtml + '</div>' +
+    photoHtml + textHtml +
     '<div class="msg-time">' + time + editedTag + tick + '</div>';
   if (mine) {
     div.style.cursor = 'pointer';
@@ -1484,6 +1536,13 @@ function renderMessage(m) {
     whoEl.onclick = function (e) {
       e.stopPropagation();
       openCharacterView(m.character_id);
+    };
+  }
+  var photoWrap = div.querySelector('.msg-photo-wrap');
+  if (photoWrap && photoWrap.classList.contains('blurred')) {
+    photoWrap.onclick = function (e) {
+      e.stopPropagation();
+      revealPhoto(m.id, photoWrap);
     };
   }
   var avatarImg = div.querySelector('.msg-avatar');
@@ -1567,12 +1626,41 @@ function cancelEdit() {
   document.getElementById('edit-banner').classList.remove('show');
 }
 
+function onMessagePhotoPicked(file) {
+  if (!file) return;
+  showToast('Загружаю фото...');
+  fetch('/api/message-photo', {
+    method: 'POST',
+    headers: { 'Content-Type': file.type || 'image/jpeg', 'X-Tg-Init-Data': (tg && tg.initData) || '' },
+    body: file
+  }).then(function (r) { return r.json().then(function (d) { if (!r.ok) throw new Error(d.error); return d; }); })
+    .then(function (data) {
+      pendingPhotoFileId = data.photo_file_id;
+      document.getElementById('photo-attach-thumb').src = '/api/tg-photo?file_id=' + encodeURIComponent(pendingPhotoFileId);
+      document.getElementById('photo-attach-blur-check').checked = false;
+      document.getElementById('photo-attach-preview').style.display = 'flex';
+      showToast('Фото готово к отправке.');
+    }).catch(function (e) { showToast(e.message); });
+}
+
+function removeAttachedPhoto() {
+  pendingPhotoFileId = null;
+  document.getElementById('photo-attach-preview').style.display = 'none';
+  document.getElementById('msg-photo-input').value = '';
+}
+
+function revealPhoto(messageId, wrapEl) {
+  wrapEl.classList.remove('blurred');
+  api('/api/message-reveal', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message_id: messageId })
+  }).catch(function () {});
+}
+
 function sendMessage() {
   var input = document.getElementById('msg-input');
   var text = input.value.trim();
-  if (!text || !currentClub) return;
-
   if (editingMessageId) {
+    if (!text || !currentClub) return;
     var id = editingMessageId;
     input.value = '';
     cancelEdit();
@@ -1583,12 +1671,16 @@ function sendMessage() {
     return;
   }
 
+  if ((!text && !pendingPhotoFileId) || !currentClub) return;
   if (!activeCharacter) return showToast('Сначала выберите персонажа.');
+  var photoFileId = pendingPhotoFileId;
+  var photoBlurred = document.getElementById('photo-attach-blur-check').checked;
   input.value = '';
   input.focus();
+  removeAttachedPhoto();
   api('/api/messages?club_id=' + currentClub.id, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text: text, character_id: activeCharacter.id })
+    body: JSON.stringify({ text: text, character_id: activeCharacter.id, photo_file_id: photoFileId, photo_blurred: photoBlurred })
   }).then(function () { forceScrollToBottom = true; pollMessages(); }).catch(function (e) { showToast(e.message); });
 }
 document.getElementById('msg-input').addEventListener('keydown', function (e) {

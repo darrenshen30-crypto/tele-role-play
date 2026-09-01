@@ -75,10 +75,12 @@ export async function onRequestGet(context) {
 
   const { results } = await env.DB.prepare(
     "SELECT cm.id, cm.user_id, cm.user_name, cm.text, cm.created_at, cm.edited_at, cm.character_id, cm.character_name, " +
-      "cm.character_avatar_file_id, cm.is_attention, ch.gender AS character_gender " +
+      "cm.character_avatar_file_id, cm.is_attention, cm.photo_file_id, cm.photo_blurred, ch.gender AS character_gender, " +
+      "CASE WHEN cm.photo_blurred = 0 OR cm.user_id = ? OR cpr.user_id IS NOT NULL THEN 1 ELSE 0 END AS photo_revealed " +
       "FROM club_messages cm LEFT JOIN characters ch ON ch.id = cm.character_id " +
+      "LEFT JOIN club_photo_reveals cpr ON cpr.message_id = cm.id AND cpr.user_id = ? " +
       "WHERE cm.club_id = ? AND (cm.id > ? OR (cm.edited_at IS NOT NULL AND cm.edited_at > ?)) ORDER BY cm.id ASC LIMIT 200"
-  ).bind(clubId, afterId, afterEdit).all();
+  ).bind(String(userId), String(userId), clubId, afterId, afterEdit).all();
 
   const otherRead = await env.DB.prepare(
     "SELECT MIN(last_read_message_id) AS v FROM club_reads WHERE club_id = ? AND user_id != ?"
@@ -109,7 +111,9 @@ export async function onRequestPost(context) {
   const body = await context.request.json();
   const text = (body.text || "").trim();
   const characterId = body.character_id;
-  if (!text) return json({ error: "Пустое сообщение." }, 400);
+  const photoFileId = body.photo_file_id || null;
+  const photoBlurred = photoFileId && body.photo_blurred ? 1 : 0;
+  if (!text && !photoFileId) return json({ error: "Пустое сообщение." }, 400);
   if (text.length > 4000) return json({ error: "Слишком длинное сообщение." }, 400);
   if (!characterId) return json({ error: "Сначала выберите персонажа." }, 400);
 
@@ -124,15 +128,16 @@ export async function onRequestPost(context) {
   let message = null;
   try {
     message = await env.DB.prepare(
-      "INSERT INTO club_messages (club_id, user_id, user_name, text, character_id, character_name, character_avatar_file_id, is_attention) " +
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?) " +
-        "RETURNING id, user_id, user_name, text, created_at, edited_at, character_id, character_name, character_avatar_file_id, is_attention"
-    ).bind(clubId, String(userId), userName || null, text, character.id, character.name, character.avatar_file_id, isAttention).first();
+      "INSERT INTO club_messages (club_id, user_id, user_name, text, character_id, character_name, character_avatar_file_id, is_attention, photo_file_id, photo_blurred) " +
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) " +
+        "RETURNING id, user_id, user_name, text, created_at, edited_at, character_id, character_name, character_avatar_file_id, is_attention, photo_file_id, photo_blurred"
+    ).bind(clubId, String(userId), userName || null, text, character.id, character.name, character.avatar_file_id, isAttention, photoFileId, photoBlurred).first();
   } catch (e) {
     console.log("Ошибка отправки сообщения:", e.message);
     return json({ error: "Не удалось отправить сообщение." }, 500);
   }
   message.character_gender = character.gender;
+  message.photo_revealed = 1;
 
   context.waitUntil(notifyRecipients(env, clubId, userId, message.id));
 
