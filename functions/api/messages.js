@@ -14,6 +14,10 @@ function isOwner(env, id) {
   return ids.indexOf(String(id)) !== -1;
 }
 
+function ownerIdList(env) {
+  return env.OWNER_ID ? String(env.OWNER_ID).split(",").map(function (s) { return s.trim(); }).filter(Boolean) : [];
+}
+
 // Сообщение целиком в # ... # - пометка "это может повлиять на реакцию персонажа".
 function isAttentionText(text) {
   return text.length >= 3 && text[0] === "#" && text[text.length - 1] === "#";
@@ -31,6 +35,7 @@ async function notifyRecipients(env, clubId, senderId, messageId) {
 
   for (const row of results || []) {
     const recipientId = row.owner_id;
+    if (!isOwner(env, recipientId)) continue;
     try {
       const readRow = await env.DB.prepare(
         "SELECT last_read_message_id, last_notified_message_id FROM club_reads WHERE club_id = ? AND user_id = ?"
@@ -82,9 +87,14 @@ export async function onRequestGet(context) {
       "WHERE cm.club_id = ? AND (cm.id > ? OR (cm.edited_at IS NOT NULL AND cm.edited_at > ?)) ORDER BY cm.id ASC LIMIT 200"
   ).bind(String(userId), String(userId), clubId, afterId, afterEdit).all();
 
+  // Считаем только тех, кто до сих пор реально имеет доступ - иначе застрявшая
+  // запись отозванного аккаунта (не может больше отметить прочтение) навсегда
+  // занижает MIN() и "прочитано" перестаёт появляться у остальных.
+  const owners = ownerIdList(env);
   const otherRead = await env.DB.prepare(
-    "SELECT MIN(last_read_message_id) AS v FROM club_reads WHERE club_id = ? AND user_id != ?"
-  ).bind(clubId, String(userId)).first();
+    "SELECT MIN(last_read_message_id) AS v FROM club_reads WHERE club_id = ? AND user_id != ? AND user_id IN (" +
+      owners.map(function () { return "?"; }).join(",") + ")"
+  ).bind(clubId, String(userId), ...owners).first();
 
   const attention = await env.DB.prepare(
     "SELECT MAX(cm.id) AS v FROM club_messages cm LEFT JOIN club_attention_dismissed cad " +

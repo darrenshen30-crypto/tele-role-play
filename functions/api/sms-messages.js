@@ -34,6 +34,7 @@ async function resolveThread(env, threadId, userId) {
 const ONLINE_WINDOW_MS = 60000;
 
 async function notifyRecipient(env, threadId, recipientId, messageId) {
+  if (!isOwner(env, recipientId)) return;
   try {
     const readRow = await env.DB.prepare(
       "SELECT last_read_message_id, last_notified_message_id FROM sms_reads WHERE thread_id = ? AND user_id = ?"
