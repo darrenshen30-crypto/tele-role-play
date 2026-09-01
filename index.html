@@ -66,6 +66,28 @@
   #screen-list { padding: 28px 20px 100px; }
   .list-title { font-size: 34px; color: var(--amber-soft); margin: 6px 0 4px; text-align: center; }
   .list-sub { text-align: center; color: var(--ink-soft); font-size: 13px; margin-bottom: 26px; }
+
+  /* ---- список пользователей на стартовом экране ---- */
+  .users-row { display: flex; gap: 16px; overflow-x: auto; padding: 2px 2px 4px; margin-bottom: 22px; justify-content: center; }
+  .user-chip { display: flex; flex-direction: column; align-items: center; gap: 5px; flex-shrink: 0; width: 64px; cursor: pointer; }
+  .user-chip-avatar-wrap { position: relative; }
+  .user-chip-avatar {
+    width: 52px; height: 52px; border-radius: 50%; object-fit: cover;
+    border: 2px solid var(--line); background: var(--bg-soft); display: block;
+  }
+  .user-chip-avatar-fallback {
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Cormorant Garamond', serif; font-size: 22px; color: var(--amber-soft);
+  }
+  .user-chip-status {
+    position: absolute; right: 0; bottom: 0; width: 13px; height: 13px; border-radius: 50%;
+    border: 2px solid var(--bg); background: #7a7061;
+  }
+  .user-chip-status.online { background: #3fb56a; }
+  .user-chip-name {
+    font-size: 11.5px; color: var(--ink-soft); text-align: center; max-width: 64px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
   .club-card {
     background: linear-gradient(180deg, var(--panel), var(--bg-soft));
     border: 1px solid var(--line);
@@ -416,6 +438,7 @@
   </div>
   <div class="list-title">Локации</div>
   <div class="list-sub">Тайные комнаты для совместных историй</div>
+  <div id="users-row" class="users-row"></div>
   <div id="categories-list"></div>
   <div id="clubs-empty" class="empty-hint" style="display:none;">
     Пока нет ни одной локации.<br />Создайте первую.
@@ -454,6 +477,15 @@
   </div>
   <div class="btn-row">
     <button class="primary-btn" onclick="openCharacterEdit(null)">+ Создать персонажа</button>
+  </div>
+</div>
+
+<div id="screen-user-characters" class="screen sub-screen">
+  <span class="back-link" onclick="showScreen('list')">&larr; Назад</span>
+  <div id="user-characters-title" class="sub-title">Персонажи</div>
+  <div id="user-characters-list"></div>
+  <div id="user-characters-empty" class="empty-hint" style="display:none;">
+    У этого пользователя пока нет персонажей.
   </div>
 </div>
 
@@ -501,7 +533,7 @@
 </div>
 
 <div id="screen-character-view" class="screen sub-screen">
-  <span class="back-link" onclick="showScreen('chat')">&larr; Назад</span>
+  <span class="back-link" onclick="leaveCharacterView()">&larr; Назад</span>
   <div style="text-align:center;">
     <img id="character-view-avatar" class="avatar-upload-preview" />
     <div id="character-view-name" class="sub-title" style="margin-bottom:2px;"></div>
@@ -640,7 +672,7 @@ function toggleTheme() {
 var screens = {
   list: 'screen-list', category: 'screen-category', create: 'screen-create', chat: 'screen-chat', settings: 'screen-settings',
   characters: 'screen-characters', characterEdit: 'screen-character-edit', characterPick: 'screen-character-pick',
-  characterView: 'screen-character-view',
+  characterView: 'screen-character-view', userCharacters: 'screen-user-characters',
   sms: 'screen-sms', smsNew: 'screen-sms-new', smsChat: 'screen-sms-chat',
 };
 var allClubs = [];
@@ -698,7 +730,8 @@ function handleTelegramBack() {
     case 'category': case 'create': case 'characters': case 'sms': showScreen('list'); break;
     case 'characterEdit': backFromCharacterEdit(); break;
     case 'characterPick': cancelCharacterPick(); break;
-    case 'characterView': showScreen('chat'); break;
+    case 'characterView': leaveCharacterView(); break;
+    case 'userCharacters': showScreen('list'); break;
     case 'smsNew': showScreen('sms'); break;
     case 'settings': showScreen('chat'); break;
     case 'chat': leaveChat(); break;
@@ -756,6 +789,56 @@ function api(path, options) {
       return data;
     });
   });
+}
+
+// ---------- список пользователей ----------
+
+function loadUsersList() {
+  api('/api/users-list').then(function (data) {
+    renderUsersList(data.users || []);
+  }).catch(function () {});
+}
+
+function renderUsersList(users) {
+  var row = document.getElementById('users-row');
+  row.innerHTML = '';
+  users.forEach(function (u) {
+    var chip = document.createElement('div');
+    chip.className = 'user-chip';
+    var avatarHtml = u.photo_url
+      ? '<img class="user-chip-avatar" src="' + escapeHtml(u.photo_url) + '" />'
+      : '<div class="user-chip-avatar user-chip-avatar-fallback">' + escapeHtml((u.name || '?').charAt(0).toUpperCase()) + '</div>';
+    chip.innerHTML =
+      '<div class="user-chip-avatar-wrap">' + avatarHtml +
+      '<span class="user-chip-status' + (u.online ? ' online' : '') + '"></span></div>' +
+      '<div class="user-chip-name">' + escapeHtml(u.name) + '</div>';
+    chip.onclick = function () { openUserCharacters(u.user_id, u.name); };
+    row.appendChild(chip);
+  });
+}
+
+function openUserCharacters(userId, name) {
+  document.getElementById('user-characters-title').textContent = 'Персонажи: ' + name;
+  api('/api/user-characters?user_id=' + encodeURIComponent(userId)).then(function (data) {
+    var chars = data.characters || [];
+    var list = document.getElementById('user-characters-list');
+    var empty = document.getElementById('user-characters-empty');
+    list.innerHTML = '';
+    if (!chars.length) { empty.style.display = 'block'; }
+    else {
+      empty.style.display = 'none';
+      chars.forEach(function (ch) {
+        var card = document.createElement('div');
+        card.className = 'pick-card';
+        card.innerHTML = '<img class="avatar-thumb" src="/api/tg-photo?file_id=' + encodeURIComponent(ch.avatar_file_id) + '">' +
+          '<div class="info"><div class="name">' + escapeHtml(ch.name) + genderBadge(ch.gender) + '</div>' +
+          (ch.birthdate ? '<div class="birthdate">' + escapeHtml(formatBirthdate(ch.birthdate)) + '</div>' : '') + '</div>';
+        card.onclick = function () { openCharacterView(ch.id, 'userCharacters'); };
+        list.appendChild(card);
+      });
+    }
+    showScreen('userCharacters');
+  }).catch(function (e) { showToast(e.message); });
 }
 
 // ---------- список клубов ----------
@@ -922,7 +1005,10 @@ function genderBadge(g) {
   return g ? '<span class="gender-badge ' + g + '">' + genderLabel(g) + '</span>' : '';
 }
 
-function openCharacterView(id) {
+var characterViewReturnTo = 'chat';
+
+function openCharacterView(id, returnTo) {
+  characterViewReturnTo = returnTo || 'chat';
   api('/api/character-view?id=' + id).then(function (data) {
     var ch = data.character;
     if (!ch) return showToast('Персонаж не найден.');
@@ -934,6 +1020,10 @@ function openCharacterView(id) {
     document.getElementById('character-view-description').textContent = ch.description || 'Без описания.';
     showScreen('characterView');
   }).catch(function (e) { showToast(e.message); });
+}
+
+function leaveCharacterView() {
+  showScreen(characterViewReturnTo);
 }
 
 function openCharacterEdit(ch, returnTo) {
@@ -1262,6 +1352,7 @@ function leaveChat() {
     if (chatOrigin === 'category' && currentCategory) { openCategory(currentCategory); }
     else { renderCategories(); showScreen('list'); }
   }).catch(function () { showScreen('list'); loadClubs(); });
+  loadUsersList();
 }
 
 function formatMessageText(text) {
@@ -1659,6 +1750,7 @@ function pollPlayback() {
 function init() {
   showScreen('list');
   loadClubs();
+  loadUsersList();
 }
 init();
 </script>

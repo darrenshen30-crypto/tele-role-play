@@ -28,6 +28,39 @@ async function resolveThread(env, threadId, userId) {
   return null;
 }
 
+// Считаем "в сети" по свежему присутствию (см. _middleware.js) - если человек
+// сейчас активен в приложении, не шлём ему уведомление о том же сообщении,
+// которое он и так вот-вот увидит.
+const ONLINE_WINDOW_MS = 60000;
+
+async function notifyRecipient(env, threadId, recipientId, messageId) {
+  const readRow = await env.DB.prepare(
+    "SELECT last_read_message_id, last_notified_message_id FROM sms_reads WHERE thread_id = ? AND user_id = ?"
+  ).bind(threadId, String(recipientId)).first();
+  const lastRead = readRow ? readRow.last_read_message_id : 0;
+  const lastNotified = readRow ? readRow.last_notified_message_id : 0;
+  if (messageId <= lastRead || messageId <= lastNotified) return;
+
+  const presence = await env.DB.prepare("SELECT last_seen FROM user_presence WHERE user_id = ?").bind(String(recipientId)).first();
+  const lastSeenMs = presence && presence.last_seen ? new Date(presence.last_seen).getTime() : 0;
+  if (Date.now() - lastSeenMs < ONLINE_WINDOW_MS) return;
+
+  try {
+    await fetch("https://api.telegram.org/bot" + env.BOT_TOKEN + "/sendMessage", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: recipientId, text: "У вас новое непрочитанное сообщение." }),
+    });
+  } catch (e) {
+    console.log("Ошибка отправки уведомления:", e.message);
+  }
+
+  await env.DB.prepare(
+    "INSERT INTO sms_reads (thread_id, user_id, last_read_message_id, last_notified_message_id) VALUES (?, ?, 0, ?) " +
+      "ON CONFLICT(thread_id, user_id) DO UPDATE SET last_notified_message_id = excluded.last_notified_message_id"
+  ).bind(threadId, String(recipientId), messageId).run();
+}
+
 export async function onRequestGet(context) {
   const env = context.env;
   const userId = context.data && context.data.tgUserId;
@@ -81,5 +114,8 @@ export async function onRequestPost(context) {
     console.log("Ошибка отправки SMS:", e.message);
     return json({ error: "Не удалось отправить сообщение." }, 500);
   }
+
+  context.waitUntil(notifyRecipient(env, threadId, access.other.owner_id, message.id));
+
   return json({ message: message });
 }

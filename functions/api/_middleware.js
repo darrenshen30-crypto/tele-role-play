@@ -36,6 +36,7 @@ async function verifyInitData(initData, botToken) {
   return {
     userId: user && user.id,
     userName: user && (user.first_name || user.username),
+    photoUrl: user && user.photo_url,
     startParam: params.get("start_param") || null,
   };
 }
@@ -46,5 +47,18 @@ export async function onRequest(context) {
   context.data = context.data || {};
   context.data.tgUserId = verified ? verified.userId : null;
   context.data.tgUserName = verified ? verified.userName : null;
+
+  // Отмечаем присутствие при каждом запросе - это и есть источник "в сети" для
+  // списка пользователей и фильтра "не слать уведомление тому, кто и так внутри".
+  if (verified && verified.userId && context.env.DB) {
+    context.waitUntil(
+      context.env.DB.prepare(
+        "INSERT INTO user_presence (user_id, name, photo_url, last_seen) VALUES (?, ?, ?, ?) " +
+          "ON CONFLICT(user_id) DO UPDATE SET name = excluded.name, photo_url = excluded.photo_url, last_seen = excluded.last_seen"
+      ).bind(String(verified.userId), verified.userName || null, verified.photoUrl || null, new Date().toISOString())
+        .run().catch(function (e) { console.log("Ошибка записи присутствия:", e.message); })
+    );
+  }
+
   return context.next();
 }
