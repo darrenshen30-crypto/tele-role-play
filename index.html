@@ -747,6 +747,13 @@ function showToast(text) {
   setTimeout(function () { el.classList.remove('show'); }, 2600);
 }
 
+// D1/SQLite отдаёт created_at/edited_at как "YYYY-MM-DD HH:MM:SS" по UTC, но без
+// суффикса - без него new Date(...) в браузере часто читает строку как локальное
+// время, и часы сообщений уезжают на разницу с UTC. Добавляем "Z" явно.
+function parseDbTime(s) {
+  return new Date(String(s).replace(' ', 'T') + 'Z');
+}
+
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, function (c) {
     return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
@@ -1209,7 +1216,7 @@ function renderSmsMessage(m) {
   var div = document.createElement('div');
   div.className = 'sms-msg ' + (mine ? 'mine' : 'theirs');
   div.dataset.id = m.id;
-  var time = new Date(m.created_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+  var time = parseDbTime(m.created_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
   var editedTag = m.edited_at ? ' <span class="edited-tag">(изменено)</span>' : '';
   var tick = mine ? ' ' + smsTickHtml(m.id) : '';
   var avatarHtml = m.character_avatar_file_id
@@ -1381,7 +1388,7 @@ function renderMessage(m) {
   var div = document.createElement('div');
   div.className = 'msg ' + (mine ? 'mine' : 'theirs');
   div.dataset.id = m.id;
-  var time = new Date(m.created_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+  var time = parseDbTime(m.created_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
   var editedTag = m.edited_at ? ' <span class="edited-tag">(изменено)</span>' : '';
   var tick = mine ? ' ' + tickHtml(m.id) : '';
   var avatarHtml = m.character_avatar_file_id
