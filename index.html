@@ -503,9 +503,9 @@
   <input id="character-name" class="field-input" placeholder="Имя персонажа" maxlength="60" />
   <div class="field-label">Пол</div>
   <div class="gender-pick" id="character-gender-pick">
-    <button type="button" class="gender-opt alpha" data-gender="alpha" onclick="pickGender('alpha')">&#9794;</button>
-    <button type="button" class="gender-opt omega" data-gender="omega" onclick="pickGender('omega')">&#9792;</button>
-    <button type="button" class="gender-opt gamma" data-gender="gamma" onclick="pickGender('gamma')">&#9893;</button>
+    <button type="button" class="gender-opt alpha" data-gender="alpha" onclick="pickGender('alpha')">&#9794; Альфа</button>
+    <button type="button" class="gender-opt omega" data-gender="omega" onclick="pickGender('omega')">&#9792; Омега</button>
+    <button type="button" class="gender-opt gamma" data-gender="gamma" onclick="pickGender('gamma')">&#9893; Гамма</button>
   </div>
   <div class="field-label">Дата рождения</div>
   <input id="character-birthdate" class="field-input" type="date" />
@@ -1005,6 +1005,15 @@ function genderBadge(g) {
   return g ? '<span class="gender-badge ' + g + '">' + genderLabel(g) + '</span>' : '';
 }
 
+// Полная подпись (значок + слово) - только для анкеты персонажа, не для списков.
+function genderLabelFull(g) {
+  return g === 'alpha' ? '&#9794; Альфа' : g === 'omega' ? '&#9792; Омега' : g === 'gamma' ? '&#9893; Гамма' : '';
+}
+
+function genderBadgeFull(g) {
+  return g ? '<span class="gender-badge ' + g + '">' + genderLabelFull(g) + '</span>' : '';
+}
+
 var characterViewReturnTo = 'chat';
 
 function openCharacterView(id, returnTo) {
@@ -1013,7 +1022,7 @@ function openCharacterView(id, returnTo) {
     var ch = data.character;
     if (!ch) return showToast('Персонаж не найден.');
     document.getElementById('character-view-avatar').src = '/api/tg-photo?file_id=' + encodeURIComponent(ch.avatar_file_id);
-    document.getElementById('character-view-name').innerHTML = escapeHtml(ch.name) + genderBadge(ch.gender);
+    document.getElementById('character-view-name').innerHTML = escapeHtml(ch.name) + genderBadgeFull(ch.gender);
     var birthdateEl = document.getElementById('character-view-birthdate');
     birthdateEl.textContent = ch.birthdate ? formatBirthdate(ch.birthdate) : '';
     birthdateEl.style.display = ch.birthdate ? 'block' : 'none';
