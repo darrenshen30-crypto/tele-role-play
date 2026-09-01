@@ -21,12 +21,15 @@ export async function onRequestGet(context) {
   const userId = context.data && context.data.tgUserId;
   if (!isOwner(env, userId)) return json({ error: "Нет доступа." }, 403);
 
+  // Себя самого в списке не показываем - свои персонажи и так видны через
+  // "Мои персонажи", список нужен только чтобы смотреть на других.
   const { results } = await env.DB.prepare(
     "SELECT ch.owner_id AS user_id, up.name, up.photo_url, up.last_seen " +
       "FROM (SELECT DISTINCT owner_id FROM characters) ch " +
       "LEFT JOIN user_presence up ON up.user_id = ch.owner_id " +
+      "WHERE ch.owner_id != ? " +
       "ORDER BY ch.owner_id"
-  ).all();
+  ).bind(String(userId)).all();
 
   const now = Date.now();
   const users = (results || []).map(function (row) {
