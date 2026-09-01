@@ -12,13 +12,19 @@ function isOwner(env, id) {
   return ids.indexOf(String(id)) !== -1;
 }
 
+const GENDERS = ["alpha", "omega", "gamma"];
+function normalizeGender(g) {
+  g = (g || "").trim().toLowerCase();
+  return GENDERS.indexOf(g) !== -1 ? g : null;
+}
+
 export async function onRequestGet(context) {
   const env = context.env;
   const userId = context.data && context.data.tgUserId;
   if (!isOwner(env, userId)) return json({ error: "Нет доступа." }, 403);
 
   const { results } = await env.DB.prepare(
-    "SELECT id, name, birthdate, description, avatar_file_id FROM characters WHERE owner_id = ? ORDER BY created_at"
+    "SELECT id, name, birthdate, description, avatar_file_id, gender FROM characters WHERE owner_id = ? ORDER BY created_at"
   ).bind(String(userId)).all();
 
   return json({ characters: results || [] });
@@ -34,15 +40,16 @@ export async function onRequestPost(context) {
   const birthdate = (body.birthdate || "").trim();
   const description = (body.description || "").trim();
   const avatarFileId = (body.avatar_file_id || "").trim();
+  const gender = normalizeGender(body.gender);
   if (!name) return json({ error: "Введите имя персонажа." }, 400);
   if (!avatarFileId) return json({ error: "Загрузите аватар." }, 400);
 
   let character = null;
   try {
     character = await env.DB.prepare(
-      "INSERT INTO characters (owner_id, name, birthdate, description, avatar_file_id) VALUES (?, ?, ?, ?, ?) " +
-        "RETURNING id, name, birthdate, description, avatar_file_id"
-    ).bind(String(userId), name, birthdate || null, description || null, avatarFileId).first();
+      "INSERT INTO characters (owner_id, name, birthdate, description, avatar_file_id, gender) VALUES (?, ?, ?, ?, ?, ?) " +
+        "RETURNING id, name, birthdate, description, avatar_file_id, gender"
+    ).bind(String(userId), name, birthdate || null, description || null, avatarFileId, gender).first();
   } catch (e) {
     console.log("Ошибка создания персонажа:", e.message);
     return json({ error: "Не удалось создать персонажа." }, 500);

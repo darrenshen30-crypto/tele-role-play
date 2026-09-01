@@ -11,6 +11,12 @@ function isOwner(env, id) {
   return ids.indexOf(String(id)) !== -1;
 }
 
+const GENDERS = ["alpha", "omega", "gamma"];
+function normalizeGender(g) {
+  g = (g || "").trim().toLowerCase();
+  return GENDERS.indexOf(g) !== -1 ? g : null;
+}
+
 export async function onRequestPatch(context) {
   const env = context.env;
   const userId = context.data && context.data.tgUserId;
@@ -28,14 +34,15 @@ export async function onRequestPatch(context) {
   const birthdate = (body.birthdate || "").trim();
   const description = (body.description || "").trim();
   const avatarFileId = (body.avatar_file_id || "").trim() || existing.avatar_file_id;
+  const gender = normalizeGender(body.gender);
   if (!name) return json({ error: "Введите имя персонажа." }, 400);
 
   let character = null;
   try {
     character = await env.DB.prepare(
-      "UPDATE characters SET name = ?, birthdate = ?, description = ?, avatar_file_id = ? WHERE id = ? " +
-        "RETURNING id, name, birthdate, description, avatar_file_id"
-    ).bind(name, birthdate || null, description || null, avatarFileId, id).first();
+      "UPDATE characters SET name = ?, birthdate = ?, description = ?, avatar_file_id = ?, gender = ? WHERE id = ? " +
+        "RETURNING id, name, birthdate, description, avatar_file_id, gender"
+    ).bind(name, birthdate || null, description || null, avatarFileId, gender, id).first();
   } catch (e) {
     console.log("Ошибка редактирования персонажа:", e.message);
     return json({ error: "Не удалось сохранить персонажа." }, 500);

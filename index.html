@@ -86,6 +86,22 @@
   .pick-card .birthdate { font-size: 12px; color: var(--ink-soft); }
   .pick-card.selected { border-color: var(--amber); box-shadow: 0 0 0 1px var(--amber) inset; }
 
+  /* ---- пол персонажа: альфа/омега/гамма ---- */
+  .gender-pick { display: flex; gap: 8px; margin-bottom: 4px; }
+  .gender-opt {
+    flex: 1; padding: 11px 6px; border-radius: 10px;
+    border: 1px solid var(--line); background: var(--bg-soft);
+    color: var(--ink-soft); font-size: 13px; font-weight: 700;
+    text-align: center; font-family: inherit;
+  }
+  .gender-opt.selected.alpha { background: #3f6fb0; border-color: #3f6fb0; color: #fff; }
+  .gender-opt.selected.omega { background: #c05a86; border-color: #c05a86; color: #fff; }
+  .gender-opt.selected.gamma { background: #8a5cc4; border-color: #8a5cc4; color: #fff; }
+  .gender-badge { font-weight: 700; margin-left: 5px; }
+  .gender-badge.alpha { color: #6fa3e0; }
+  .gender-badge.omega { color: #e089ac; }
+  .gender-badge.gamma { color: #b58bea; }
+
   /* ---- SMS ---- */
   #screen-sms, #screen-sms-new { padding: 24px 20px 60px; }
   .sms-thread-card {
@@ -402,6 +418,12 @@
 
   <div class="field-label">Имя</div>
   <input id="character-name" class="field-input" placeholder="Имя персонажа" maxlength="60" />
+  <div class="field-label">Пол</div>
+  <div class="gender-pick" id="character-gender-pick">
+    <button type="button" class="gender-opt alpha" data-gender="alpha" onclick="pickGender('alpha')">&#9794; Альфа</button>
+    <button type="button" class="gender-opt omega" data-gender="omega" onclick="pickGender('omega')">&#9792; Омега</button>
+    <button type="button" class="gender-opt gamma" data-gender="gamma" onclick="pickGender('gamma')">&#9893; Гамма</button>
+  </div>
   <div class="field-label">Дата рождения</div>
   <input id="character-birthdate" class="field-input" type="date" />
   <div class="field-label">Краткое описание</div>
@@ -556,6 +578,7 @@ var myCharacters = [];
 var activeCharacter = null;
 var characterEditingId = null;
 var characterAvatarFileId = null;
+var editingGender = null;
 var pickMode = 'initial';
 var pendingClub = null;
 var pendingOrigin = 'list';
@@ -748,7 +771,7 @@ function openCharacterPickScreen() {
         var card = document.createElement('div');
         card.className = 'pick-card';
         card.innerHTML = '<img class="avatar-thumb" src="/api/tg-photo?file_id=' + encodeURIComponent(ch.avatar_file_id) + '">' +
-          '<div class="info"><div class="name">' + escapeHtml(ch.name) + '</div>' +
+          '<div class="info"><div class="name">' + escapeHtml(ch.name) + genderBadge(ch.gender) + '</div>' +
           (ch.birthdate ? '<div class="birthdate">' + escapeHtml(formatBirthdate(ch.birthdate)) + '</div>' : '') + '</div>';
         card.onclick = function () { chooseCharacter(ch); };
         list.appendChild(card);
@@ -794,7 +817,7 @@ function openCharactersScreen() {
         var card = document.createElement('div');
         card.className = 'club-card char-card';
         card.innerHTML = '<img class="avatar-thumb" src="/api/tg-photo?file_id=' + encodeURIComponent(ch.avatar_file_id) + '">' +
-          '<span class="name">' + escapeHtml(ch.name) + '</span><span class="arrow">&rarr;</span>';
+          '<span class="name">' + escapeHtml(ch.name) + genderBadge(ch.gender) + '</span><span class="arrow">&rarr;</span>';
         card.onclick = function () { openCharacterEdit(ch); };
         list.appendChild(card);
       });
@@ -803,14 +826,32 @@ function openCharactersScreen() {
   }).catch(function (e) { showToast(e.message); });
 }
 
+function pickGender(g) {
+  editingGender = editingGender === g ? null : g;
+  var buttons = document.querySelectorAll('#character-gender-pick .gender-opt');
+  for (var i = 0; i < buttons.length; i++) {
+    buttons[i].classList.toggle('selected', buttons[i].dataset.gender === editingGender);
+  }
+}
+
+function genderLabel(g) {
+  return g === 'alpha' ? '&#9794; Альфа' : g === 'omega' ? '&#9792; Омега' : g === 'gamma' ? '&#9893; Гамма' : '';
+}
+
+function genderBadge(g) {
+  return g ? '<span class="gender-badge ' + g + '">' + genderLabel(g) + '</span>' : '';
+}
+
 function openCharacterEdit(ch, returnTo) {
   characterEditReturnTo = returnTo || 'characters';
   characterEditingId = ch ? ch.id : null;
   characterAvatarFileId = ch ? ch.avatar_file_id : null;
+  editingGender = null;
   document.getElementById('character-edit-title').textContent = ch ? 'Редактирование персонажа' : 'Новый персонаж';
   document.getElementById('character-name').value = ch ? ch.name : '';
   document.getElementById('character-birthdate').value = ch ? (ch.birthdate || '') : '';
   document.getElementById('character-description').value = ch ? (ch.description || '') : '';
+  pickGender(ch && ch.gender ? ch.gender : null);
   var preview = document.getElementById('character-avatar-preview');
   var hint = document.getElementById('character-avatar-hint');
   if (ch) { preview.src = '/api/tg-photo?file_id=' + encodeURIComponent(ch.avatar_file_id); preview.style.display = 'block'; hint.textContent = 'Заменить фото'; }
@@ -844,7 +885,7 @@ function saveCharacter() {
   if (!name) return showToast('Введите имя.');
   if (!characterAvatarFileId) return showToast('Загрузите фото.');
 
-  var body = JSON.stringify({ name: name, birthdate: birthdate, description: description, avatar_file_id: characterAvatarFileId });
+  var body = JSON.stringify({ name: name, birthdate: birthdate, description: description, avatar_file_id: characterAvatarFileId, gender: editingGender });
   var req = characterEditingId
     ? api('/api/character?id=' + characterEditingId, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: body })
     : api('/api/characters', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: body });
@@ -920,7 +961,7 @@ function renderSmsCharacterPickList(containerId, list, which) {
     var card = document.createElement('div');
     card.className = 'pick-card';
     card.innerHTML = '<img class="avatar-thumb" src="/api/tg-photo?file_id=' + encodeURIComponent(ch.avatar_file_id) + '">' +
-      '<div class="info"><div class="name">' + escapeHtml(ch.name) + '</div>' +
+      '<div class="info"><div class="name">' + escapeHtml(ch.name) + genderBadge(ch.gender) + '</div>' +
       (ch.birthdate ? '<div class="birthdate">' + escapeHtml(formatBirthdate(ch.birthdate)) + '</div>' : '') + '</div>';
     card.onclick = function () {
       if (which === 'mine') smsSelectedMineId = ch.id; else smsSelectedOtherId = ch.id;
