@@ -450,9 +450,7 @@
 
   #yt-player-holder { position: fixed; width: 2px; height: 2px; overflow: hidden; opacity: 0; pointer-events: none; }
 
-  /* ---- переключатель тёмной/светлой темы ---- */
-  .theme-row { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 6px; }
-  .theme-icon { font-size: 15px; color: var(--ink-soft); }
+  /* ---- переключатели языка и темы ---- */
   .theme-toggle { position: relative; display: inline-block; width: 46px; height: 25px; cursor: pointer; flex-shrink: 0; }
   .theme-toggle input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
   .theme-toggle-track {
@@ -464,6 +462,20 @@
     background: var(--btn-bottom); transition: transform 0.2s;
   }
   .theme-toggle input:checked ~ .theme-toggle-track .theme-toggle-thumb { transform: translateX(21px); }
+
+  .settings-block { margin-top: 28px; display: flex; flex-direction: column; gap: 16px; }
+  .settings-item { display: flex; align-items: center; gap: 12px; }
+  .settings-icon {
+    width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0;
+    background: var(--bg-soft); border: 1px solid var(--line);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 15px; color: var(--ink-soft);
+  }
+  .settings-text { flex: 1; min-width: 0; }
+  .settings-label { font-size: 14px; color: var(--ink); font-weight: 600; }
+  .settings-hint { font-size: 11.5px; color: var(--ink-soft); line-height: 1.35; margin-top: 2px; }
+  .settings-caption { font-size: 11px; color: var(--ink-soft); margin-top: 3px; }
+  .footer-tagline { text-align: center; font-size: 12px; color: var(--ink-soft); margin-top: 24px; opacity: 0.8; }
 
   /* ---- сплэш-экран при запуске ---- */
   #screen-splash {
@@ -528,149 +540,168 @@
 </div>
 
 <div id="screen-list" class="screen active">
-  <div class="theme-row">
-    <span class="theme-icon">&#9788;</span>
-    <label class="theme-toggle">
-      <input type="checkbox" id="theme-toggle-input" onchange="toggleTheme()" />
-      <span class="theme-toggle-track"><span class="theme-toggle-thumb"></span></span>
-    </label>
-    <span class="theme-icon">&#9789;</span>
-  </div>
-  <div class="list-title">Локации</div>
-  <div class="list-sub">Тайные комнаты для совместных историй</div>
+  <div class="list-title" data-i18n="home_title">Локации</div>
+  <div class="list-sub" data-i18n="home_sub">Тайные комнаты для совместных историй</div>
   <div id="users-row" class="users-row"></div>
   <div id="categories-list"></div>
-  <div id="clubs-empty" class="empty-hint" style="display:none;">
+  <div id="clubs-empty" class="empty-hint" style="display:none;" data-i18n="empty_locations">
     Пока нет ни одной локации.<br />Создайте первую.
   </div>
   <div class="btn-row">
-    <button class="primary-btn" onclick="showScreen('create')">+ Создать локацию</button>
-    <button class="ghost-btn" onclick="openCharactersScreen()">Мои персонажи</button>
-    <button class="ghost-btn" onclick="openSmsListScreen()">SMS</button>
+    <button class="primary-btn" onclick="showScreen('create')" data-i18n="btn_create_location">+ Создать локацию</button>
+    <button class="ghost-btn" onclick="openCharactersScreen()" data-i18n="btn_my_characters">Мои персонажи</button>
+    <button class="ghost-btn" onclick="openSmsListScreen()" data-i18n="btn_sms">SMS</button>
   </div>
+
+  <div class="settings-block">
+    <div class="settings-item">
+      <div class="settings-icon">&#127760;</div>
+      <div class="settings-text">
+        <div class="settings-label" data-i18n="lang_label">Язык интерфейса</div>
+        <div class="settings-hint" data-i18n="lang_hint">Переключает весь интерфейс. Имена персонажей и сообщения остаются как есть.</div>
+      </div>
+      <label class="theme-toggle">
+        <input type="checkbox" id="lang-toggle-input" onchange="toggleLang()" />
+        <span class="theme-toggle-track"><span class="theme-toggle-thumb"></span></span>
+      </label>
+    </div>
+    <div class="settings-item">
+      <div class="settings-icon">&#9789;</div>
+      <div class="settings-text">
+        <div class="settings-label" data-i18n="theme_label">Тёмная тема</div>
+        <div class="settings-hint" data-i18n="theme_hint">Переключает весь мини-апп - фон, плитки, текст и комнаты. Выбор запоминается.</div>
+        <div class="settings-caption" id="theme-now-caption"></div>
+      </div>
+      <label class="theme-toggle">
+        <input type="checkbox" id="theme-toggle-input" onchange="toggleTheme()" />
+        <span class="theme-toggle-track"><span class="theme-toggle-thumb"></span></span>
+      </label>
+    </div>
+  </div>
+  <div class="footer-tagline" data-i18n="footer_tagline">Where role turns into lore.</div>
 </div>
 
 <div id="screen-category" class="screen sub-screen">
-  <span class="back-link" onclick="showScreen('list')">&larr; Назад</span>
-  <div id="category-title" class="sub-title">Категория</div>
+  <span class="back-link" onclick="showScreen('list')" data-i18n="back">&larr; Назад</span>
+  <div id="category-title" class="sub-title" data-i18n="category_title_default">Категория</div>
   <div id="category-list"></div>
 </div>
 
 <div id="screen-create" class="screen sub-screen">
-  <span class="back-link" onclick="showScreen('list')">&larr; Назад</span>
-  <div class="sub-title">Новая локация</div>
-  <div class="field-label">Категория</div>
-  <input id="create-category" class="field-input" placeholder="Например, «Клуб» или «Дом»" maxlength="40" />
-  <div class="field-label">Название</div>
-  <input id="create-name" class="field-input" placeholder="Например, «Полуночный салон»" maxlength="60" />
+  <span class="back-link" onclick="showScreen('list')" data-i18n="back">&larr; Назад</span>
+  <div class="sub-title" data-i18n="create_title">Новая локация</div>
+  <div class="field-label" data-i18n="label_category">Категория</div>
+  <input id="create-category" class="field-input" data-i18n-ph="placeholder_category" placeholder="Например, «Клуб» или «Дом»" maxlength="40" />
+  <div class="field-label" data-i18n="label_name">Название</div>
+  <input id="create-name" class="field-input" data-i18n-ph="placeholder_location_name" placeholder="Например, «Полуночный салон»" maxlength="60" />
   <div class="btn-row">
-    <button class="primary-btn" onclick="createClub()">Создать</button>
+    <button class="primary-btn" onclick="createClub()" data-i18n="btn_create">Создать</button>
   </div>
 </div>
 
 <div id="screen-characters" class="screen sub-screen">
-  <span class="back-link" onclick="showScreen('list')">&larr; Назад</span>
-  <div class="sub-title">Мои персонажи</div>
+  <span class="back-link" onclick="showScreen('list')" data-i18n="back">&larr; Назад</span>
+  <div class="sub-title" data-i18n="characters_title">Мои персонажи</div>
   <div id="characters-list"></div>
-  <div id="characters-empty" class="empty-hint" style="display:none;">
+  <div id="characters-empty" class="empty-hint" style="display:none;" data-i18n="empty_characters">
     Персонажей пока нет.<br />Создайте первого.
   </div>
   <div class="btn-row">
-    <button class="primary-btn" onclick="openCharacterEdit(null)">+ Создать персонажа</button>
+    <button class="primary-btn" onclick="openCharacterEdit(null)" data-i18n="btn_create_character">+ Создать персонажа</button>
   </div>
 </div>
 
 <div id="screen-user-characters" class="screen sub-screen">
-  <span class="back-link" onclick="showScreen('list')">&larr; Назад</span>
+  <span class="back-link" onclick="showScreen('list')" data-i18n="back">&larr; Назад</span>
   <div id="user-characters-title" class="sub-title">Персонажи</div>
   <div id="user-characters-list"></div>
-  <div id="user-characters-empty" class="empty-hint" style="display:none;">
+  <div id="user-characters-empty" class="empty-hint" style="display:none;" data-i18n="empty_user_characters">
     У этого пользователя пока нет персонажей.
   </div>
 </div>
 
 <div id="screen-character-edit" class="screen sub-screen">
-  <span class="back-link" onclick="backFromCharacterEdit()">&larr; Назад</span>
-  <div id="character-edit-title" class="sub-title">Новый персонаж</div>
+  <span class="back-link" onclick="backFromCharacterEdit()" data-i18n="back">&larr; Назад</span>
+  <div id="character-edit-title" class="sub-title" data-i18n="character_edit_title_new">Новый персонаж</div>
 
   <label class="avatar-upload-label">
     <img id="character-avatar-preview" class="avatar-upload-preview" style="display:none;" />
-    <div id="character-avatar-hint" class="avatar-upload-hint">Загрузить фото</div>
+    <div id="character-avatar-hint" class="avatar-upload-hint" data-i18n="avatar_upload_new">Загрузить фото</div>
     <input type="file" id="character-avatar-input" accept="image/*" onchange="onCharacterAvatarPicked(this.files[0])" />
   </label>
 
-  <div class="field-label">Имя</div>
-  <input id="character-name" class="field-input" placeholder="Имя персонажа" maxlength="60" />
-  <div class="field-label">Пол</div>
+  <div class="field-label" data-i18n="label_char_name">Имя</div>
+  <input id="character-name" class="field-input" data-i18n-ph="placeholder_char_name" placeholder="Имя персонажа" maxlength="60" />
+  <div class="field-label" data-i18n="label_gender">Пол</div>
   <div class="gender-pick" id="character-gender-pick">
-    <button type="button" class="gender-opt alpha" data-gender="alpha" onclick="pickGender('alpha')">&#9794; Альфа</button>
-    <button type="button" class="gender-opt omega" data-gender="omega" onclick="pickGender('omega')">&#9792; Омега</button>
-    <button type="button" class="gender-opt gamma" data-gender="gamma" onclick="pickGender('gamma')">&#9893; Гамма</button>
+    <button type="button" class="gender-opt alpha" data-gender="alpha" onclick="pickGender('alpha')">&#9794; <span data-i18n="gender_alpha">Альфа</span></button>
+    <button type="button" class="gender-opt omega" data-gender="omega" onclick="pickGender('omega')">&#9792; <span data-i18n="gender_omega">Омега</span></button>
+    <button type="button" class="gender-opt gamma" data-gender="gamma" onclick="pickGender('gamma')">&#9893; <span data-i18n="gender_gamma">Гамма</span></button>
   </div>
-  <div class="field-label">Дата рождения</div>
+  <div class="field-label" data-i18n="label_birthdate">Дата рождения</div>
   <div class="birthdate-pick">
     <select id="character-birthdate-day" class="bp-day"></select>
     <select id="character-birthdate-month" class="bp-month"></select>
     <select id="character-birthdate-year" class="bp-year"></select>
   </div>
-  <div class="field-label">Краткое описание</div>
-  <textarea id="character-description" class="textarea-input" placeholder="Пара слов о персонаже" maxlength="500"></textarea>
+  <div class="field-label" data-i18n="label_description">Краткое описание</div>
+  <textarea id="character-description" class="textarea-input" data-i18n-ph="placeholder_description" placeholder="Пара слов о персонаже" maxlength="500"></textarea>
 
   <div class="btn-row">
-    <button class="primary-btn" onclick="saveCharacter()">Сохранить</button>
+    <button class="primary-btn" onclick="saveCharacter()" data-i18n="save">Сохранить</button>
   </div>
   <div class="btn-row" id="character-delete-row" style="display:none;">
-    <button class="danger-btn" onclick="deleteCharacter()">Удалить персонажа</button>
+    <button class="danger-btn" onclick="deleteCharacter()" data-i18n="btn_delete_character">Удалить персонажа</button>
   </div>
 </div>
 
 <div id="screen-character-pick" class="screen sub-screen">
-  <span class="back-link" onclick="cancelCharacterPick()">&larr; Назад</span>
-  <div class="sub-title">За кого вы говорите?</div>
+  <span class="back-link" onclick="cancelCharacterPick()" data-i18n="back">&larr; Назад</span>
+  <div class="sub-title" data-i18n="character_pick_title">За кого вы говорите?</div>
   <div id="character-pick-list"></div>
-  <div id="character-pick-empty" class="empty-hint" style="display:none;">
+  <div id="character-pick-empty" class="empty-hint" style="display:none;" data-i18n="empty_character_pick">
     У вас ещё нет персонажей.<br />Создайте хотя бы одного, чтобы писать в этой локации.
   </div>
   <div class="btn-row">
-    <button class="ghost-btn" onclick="openCharacterEdit(null, 'pick')">+ Создать персонажа</button>
+    <button class="ghost-btn" onclick="openCharacterEdit(null, 'pick')" data-i18n="btn_create_character">+ Создать персонажа</button>
   </div>
 </div>
 
 <div id="screen-character-view" class="screen sub-screen">
-  <span class="back-link" onclick="leaveCharacterView()">&larr; Назад</span>
+  <span class="back-link" onclick="leaveCharacterView()" data-i18n="back">&larr; Назад</span>
   <div style="text-align:center;">
     <img id="character-view-avatar" class="avatar-upload-preview" />
     <div id="character-view-name" class="sub-title" style="margin-bottom:2px;"></div>
     <div id="character-view-birthdate" class="list-sub" style="margin-bottom:18px;"></div>
   </div>
-  <div class="field-label">Описание</div>
+  <div class="field-label" data-i18n="label_view_description">Описание</div>
   <div id="character-view-description" style="color:var(--ink); font-size:15px; line-height:1.5; white-space:pre-wrap;"></div>
 </div>
 
 <div id="screen-sms" class="screen sub-screen">
-  <span class="back-link" onclick="showScreen('list')">&larr; Назад</span>
+  <span class="back-link" onclick="showScreen('list')" data-i18n="back">&larr; Назад</span>
   <div class="sub-title">SMS</div>
   <div id="sms-threads-list"></div>
-  <div id="sms-threads-empty" class="empty-hint" style="display:none;">
+  <div id="sms-threads-empty" class="empty-hint" style="display:none;" data-i18n="empty_sms_threads">
     Переписок пока нет.<br />Начните новую.
   </div>
   <div class="btn-row">
-    <button class="primary-btn" onclick="openSmsNewScreen()">+ Написать SMS</button>
+    <button class="primary-btn" onclick="openSmsNewScreen()" data-i18n="btn_write_sms">+ Написать SMS</button>
   </div>
 </div>
 
 <div id="screen-sms-new" class="screen sub-screen">
-  <span class="back-link" onclick="showScreen('sms')">&larr; Назад</span>
-  <div class="sub-title">Новая переписка</div>
+  <span class="back-link" onclick="showScreen('sms')" data-i18n="back">&larr; Назад</span>
+  <div class="sub-title" data-i18n="sms_new_title">Новая переписка</div>
 
-  <div class="field-label">От кого (ваш персонаж)</div>
+  <div class="field-label" data-i18n="label_from_character">От кого (ваш персонаж)</div>
   <div id="sms-my-characters"></div>
 
-  <div class="field-label">Кому (персонаж собеседника)</div>
+  <div class="field-label" data-i18n="label_to_character">Кому (персонаж собеседника)</div>
   <div id="sms-other-characters"></div>
 
   <div class="btn-row">
-    <button class="primary-btn" onclick="startSmsThread()">Начать переписку</button>
+    <button class="primary-btn" onclick="startSmsThread()" data-i18n="btn_start_conversation">Начать переписку</button>
   </div>
 </div>
 
@@ -684,11 +715,11 @@
   </div>
   <div id="sms-messages" class="sms-messages"></div>
   <div id="sms-edit-banner" class="playback-banner">
-    <div class="txt">Редактирование сообщения</div>
-    <button class="secondary" onclick="cancelSmsEdit()">Отмена</button>
+    <div class="txt" data-i18n="edit_message_banner">Редактирование сообщения</div>
+    <button class="secondary" onclick="cancelSmsEdit()" data-i18n="cancel">Отмена</button>
   </div>
   <div class="sms-input-row">
-    <input id="sms-msg-input" placeholder="Сообщение..." maxlength="4000" />
+    <input id="sms-msg-input" data-i18n-ph="message_placeholder" placeholder="Сообщение..." maxlength="4000" />
     <button class="send-btn" onclick="sendSmsMessage()">&#10148;</button>
   </div>
 </div>
@@ -698,7 +729,7 @@
   <div class="chat-top">
     <button class="icon-btn" onclick="leaveChat()">&larr;</button>
     <div id="chat-title" class="chat-title">Локация</div>
-    <button class="icon-btn" onclick="openCharacterPicker('switch')" title="Сменить персонажа">&#127917;</button>
+    <button class="icon-btn" onclick="openCharacterPicker('switch')" data-i18n-title="change_character_title" title="Сменить персонажа">&#127917;</button>
     <button id="music-btn" class="icon-btn" onclick="toggleMusic()">&#9835;</button>
     <button class="icon-btn" onclick="openSettings()">&#9881;</button>
   </div>
@@ -706,22 +737,22 @@
     <div id="attention-banner" class="attention-banner">
       <div class="attention-bar"></div>
       <div class="attention-text">
-        <div class="attention-title">Внимание!</div>
-        <div class="attention-sub">Ваш ответ может повлиять на реакцию персонажа.</div>
+        <div class="attention-title" data-i18n="attention_title">Внимание!</div>
+        <div class="attention-sub" data-i18n="attention_sub">Ваш ответ может повлиять на реакцию персонажа.</div>
       </div>
       <button class="attention-close" onclick="dismissAttention()">&times;</button>
     </div>
     <div id="playback-banner" class="playback-banner"></div>
     <div id="messages" class="messages"></div>
     <div id="edit-banner" class="playback-banner">
-      <div class="txt">Редактирование сообщения</div>
-      <button class="secondary" onclick="cancelEdit()">Отмена</button>
+      <div class="txt" data-i18n="edit_message_banner">Редактирование сообщения</div>
+      <button class="secondary" onclick="cancelEdit()" data-i18n="cancel">Отмена</button>
     </div>
     <div id="photo-attach-preview" class="photo-attach-preview" style="display:none;">
       <img id="photo-attach-thumb" class="photo-attach-thumb" />
       <label class="photo-attach-blur">
         <input type="checkbox" id="photo-attach-blur-check" />
-        Скрыть до нажатия
+        <span data-i18n="hide_until_tap">Скрыть до нажатия</span>
       </label>
       <button type="button" class="photo-attach-remove" onclick="removeAttachedPhoto()">&times;</button>
     </div>
@@ -730,32 +761,32 @@
         &#128206;
         <input type="file" id="msg-photo-input" accept="image/*" style="display:none;" onchange="onMessagePhotoPicked(this.files[0])" />
       </label>
-      <input id="msg-input" placeholder="Сообщение..." maxlength="4000" />
+      <input id="msg-input" data-i18n-ph="message_placeholder" placeholder="Сообщение..." maxlength="4000" />
       <button class="send-btn" onclick="sendMessage()">&#10148;</button>
     </div>
   </div>
 </div>
 
 <div id="screen-settings" class="screen sub-screen">
-  <span class="back-link" onclick="showScreen('chat')">&larr; Назад в чат</span>
-  <div class="sub-title">Настройки локации</div>
+  <span class="back-link" onclick="showScreen('chat')" data-i18n="back_to_chat">&larr; Назад в чат</span>
+  <div class="sub-title" data-i18n="settings_title">Настройки локации</div>
 
-  <div class="field-label">Фон локации</div>
+  <div class="field-label" data-i18n="label_bg">Фон локации</div>
   <img id="bg-preview" class="bg-preview" style="display:none;" />
   <label class="file-label">
-    Выбрать фотографию
+    <span data-i18n="btn_choose_photo">Выбрать фотографию</span>
     <input type="file" id="bg-input" accept="image/*" onchange="uploadBackground(this.files[0])" />
   </label>
 
-  <div class="field-label">Музыка (ссылка на YouTube)</div>
+  <div class="field-label" data-i18n="label_music">Музыка (ссылка на YouTube)</div>
   <input id="music-input" class="field-input" placeholder="https://youtube.com/watch?v=..." />
   <div class="btn-row">
-    <button class="primary-btn" onclick="saveMusic()">Сохранить</button>
+    <button class="primary-btn" onclick="saveMusic()" data-i18n="save">Сохранить</button>
   </div>
 
-  <div class="field-label">Опасная зона</div>
+  <div class="field-label" data-i18n="danger_zone">Опасная зона</div>
   <div class="btn-row">
-    <button class="danger-btn" onclick="deleteLocation()">Удалить локацию</button>
+    <button class="danger-btn" onclick="deleteLocation()" data-i18n="btn_delete_location">Удалить локацию</button>
   </div>
 </div>
 
@@ -773,16 +804,310 @@ function applyTheme(theme) {
   document.documentElement.setAttribute('data-theme', theme);
   var input = document.getElementById('theme-toggle-input');
   if (input) input.checked = theme === 'light';
+  updateThemeLangCaptions();
+}
+function updateThemeLangCaptions() {
+  var caption = document.getElementById('theme-now-caption');
+  if (caption) {
+    var isLight = document.documentElement.getAttribute('data-theme') === 'light';
+    caption.textContent = t(isLight ? 'theme_now_light' : 'theme_now_dark');
+  }
+  var langInput = document.getElementById('lang-toggle-input');
+  if (langInput) langInput.checked = uiLang === 'en';
 }
 function toggleTheme() {
   var theme = document.getElementById('theme-toggle-input').checked ? 'light' : 'dark';
   try { localStorage.setItem('theme', theme); } catch (e) {}
   applyTheme(theme);
 }
+
+// ---------- перевод интерфейса (RU/EN) ----------
+// Переводится только "рамка" приложения - кнопки, заголовки, подсказки,
+// системные сообщения. Имена персонажей, названия локаций/категорий и текст
+// самих сообщений остаются как есть, их никто не переводит.
+var I18N = {
+  ru: {
+    app_title: 'Клубы',
+    back: '&larr; Назад',
+    save: 'Сохранить',
+    cancel: 'Отмена',
+    server_error: 'Ошибка сервера',
+    uncategorized: 'Без категории',
+    guest: 'Гость',
+    edited_tag: '(изменено)',
+    message_placeholder: 'Сообщение...',
+
+    home_title: 'Локации',
+    home_sub: 'Тайные комнаты для совместных историй',
+    btn_create_location: '+ Создать локацию',
+    btn_my_characters: 'Мои персонажи',
+    btn_sms: 'SMS',
+    empty_locations: 'Пока нет ни одной локации.<br />Создайте первую.',
+    lang_label: 'Язык интерфейса',
+    lang_hint: 'Переключает весь интерфейс. Имена персонажей и сообщения остаются как есть.',
+    theme_label: 'Тёмная тема',
+    theme_hint: 'Переключает весь мини-апп - фон, плитки, текст и комнаты. Выбор запоминается.',
+    theme_now_dark: 'Сейчас: тёмная',
+    theme_now_light: 'Сейчас: светлая',
+    footer_tagline: 'Where role turns into lore.',
+
+    category_title_default: 'Категория',
+
+    create_title: 'Новая локация',
+    label_category: 'Категория',
+    placeholder_category: 'Например, «Клуб» или «Дом»',
+    label_name: 'Название',
+    placeholder_location_name: 'Например, «Полуночный салон»',
+    btn_create: 'Создать',
+    toast_enter_category: 'Введите категорию.',
+    toast_enter_location_name: 'Введите название.',
+
+    characters_title: 'Мои персонажи',
+    btn_create_character: '+ Создать персонажа',
+    empty_characters: 'Персонажей пока нет.<br />Создайте первого.',
+
+    user_characters_prefix: 'Персонажи: ',
+    empty_user_characters: 'У этого пользователя пока нет персонажей.',
+
+    character_edit_title_new: 'Новый персонаж',
+    character_edit_title_edit: 'Редактирование персонажа',
+    avatar_upload_new: 'Загрузить фото',
+    avatar_upload_replace: 'Заменить фото',
+    label_char_name: 'Имя',
+    placeholder_char_name: 'Имя персонажа',
+    label_gender: 'Пол',
+    gender_alpha: 'Альфа',
+    gender_omega: 'Омега',
+    gender_gamma: 'Гамма',
+    label_birthdate: 'Дата рождения',
+    bp_day: 'День',
+    bp_month: 'Месяц',
+    bp_year: 'Год',
+    month_1: 'Январь', month_2: 'Февраль', month_3: 'Март', month_4: 'Апрель',
+    month_5: 'Май', month_6: 'Июнь', month_7: 'Июль', month_8: 'Август',
+    month_9: 'Сентябрь', month_10: 'Октябрь', month_11: 'Ноябрь', month_12: 'Декабрь',
+    label_description: 'Краткое описание',
+    placeholder_description: 'Пара слов о персонаже',
+    btn_delete_character: 'Удалить персонажа',
+    toast_uploading_photo: 'Загружаю фото...',
+    toast_photo_uploaded: 'Фото загружено.',
+    toast_enter_name: 'Введите имя.',
+    toast_upload_photo: 'Загрузите фото.',
+    toast_saved: 'Сохранено.',
+    confirm_delete_character: 'Удалить этого персонажа? Отправленные им сообщения останутся в чатах.',
+    toast_character_deleted: 'Персонаж удалён.',
+
+    character_pick_title: 'За кого вы говорите?',
+    empty_character_pick: 'У вас ещё нет персонажей.<br />Создайте хотя бы одного, чтобы писать в этой локации.',
+    empty_sms_threads: 'Переписок пока нет.<br />Начните новую.',
+    btn_choose_photo: 'Выбрать фотографию',
+    toast_create_own_character_first: 'Сначала создайте своего персонажа.',
+    toast_other_has_no_characters: 'У второго человека пока нет персонажей.',
+    toast_choose_own_character: 'Выберите своего персонажа.',
+    toast_choose_other_character: 'Выберите персонажа собеседника.',
+
+    label_view_description: 'Описание',
+    toast_character_not_found: 'Персонаж не найден.',
+    no_description: 'Без описания.',
+
+    btn_write_sms: '+ Написать SMS',
+    sms_new_title: 'Новая переписка',
+    label_from_character: 'От кого (ваш персонаж)',
+    label_to_character: 'Кому (персонаж собеседника)',
+    btn_start_conversation: 'Начать переписку',
+    default_interlocutor: 'Собеседник',
+    default_subtitle_prefix: 'от лица...',
+    as_prefix: 'от лица ',
+
+    default_location_title: 'Локация',
+    change_character_title: 'Сменить персонажа',
+    attention_title: 'Внимание!',
+    attention_sub: 'Ваш ответ может повлиять на реакцию персонажа.',
+    edit_message_banner: 'Редактирование сообщения',
+    hide_until_tap: 'Скрыть до нажатия',
+    tap_to_view: 'Нажмите, чтобы посмотреть',
+    toast_choose_character_first: 'Сначала выберите персонажа.',
+    toast_photo_ready: 'Фото готово к отправке.',
+
+    back_to_chat: '&larr; Назад в чат',
+    settings_title: 'Настройки локации',
+    label_bg: 'Фон локации',
+    label_music: 'Музыка (ссылка на YouTube)',
+    danger_zone: 'Опасная зона',
+    btn_delete_location: 'Удалить локацию',
+    toast_bg_updated: 'Фон обновлён.',
+    toast_location_deleted: 'Локация удалена.',
+    toast_music_saved: 'Музыка сохранена.',
+    toast_music_link_missing: 'Ссылка на музыку не задана. Добавьте её в настройках клуба.',
+    confirm_delete_location: function (name) { return 'Удалить локацию «' + name + '»? Сообщения, фон и музыка будут потеряны безвозвратно.'; },
+
+    playback_waiting_ready: function (ready, total) { return 'Ждём остальных: готовы ' + ready + ' из ' + total + '...'; },
+    playback_someone_offers: 'Кто-то предлагает включить музыку в клубе.',
+    btn_ready: 'Готов',
+    btn_start_without_others: 'Начать без остальных',
+  },
+  en: {
+    app_title: 'Clubs',
+    back: '&larr; Back',
+    save: 'Save',
+    cancel: 'Cancel',
+    server_error: 'Server error',
+    uncategorized: 'Uncategorized',
+    guest: 'Guest',
+    edited_tag: '(edited)',
+    message_placeholder: 'Message...',
+
+    home_title: 'Locations',
+    home_sub: 'Secret rooms for shared stories',
+    btn_create_location: '+ Create location',
+    btn_my_characters: 'My characters',
+    btn_sms: 'SMS',
+    empty_locations: 'No locations yet.<br />Create the first one.',
+    lang_label: 'Interface language',
+    lang_hint: 'Switches the whole interface. Character names and messages stay as written.',
+    theme_label: 'Dark theme',
+    theme_hint: 'Switches the whole mini app - background, tiles, text and rooms. Your choice is saved.',
+    theme_now_dark: 'Now: dark',
+    theme_now_light: 'Now: light',
+    footer_tagline: 'Where role turns into lore.',
+
+    category_title_default: 'Category',
+
+    create_title: 'New location',
+    label_category: 'Category',
+    placeholder_category: 'e.g. "Club" or "Home"',
+    label_name: 'Name',
+    placeholder_location_name: 'e.g. "Midnight Salon"',
+    btn_create: 'Create',
+    toast_enter_category: 'Enter a category.',
+    toast_enter_location_name: 'Enter a name.',
+
+    characters_title: 'My characters',
+    btn_create_character: '+ Create character',
+    empty_characters: 'No characters yet.<br />Create the first one.',
+
+    user_characters_prefix: 'Characters: ',
+    empty_user_characters: 'This person has no characters yet.',
+
+    character_edit_title_new: 'New character',
+    character_edit_title_edit: 'Edit character',
+    avatar_upload_new: 'Upload photo',
+    avatar_upload_replace: 'Replace photo',
+    label_char_name: 'Name',
+    placeholder_char_name: 'Character name',
+    label_gender: 'Gender',
+    gender_alpha: 'Alpha',
+    gender_omega: 'Omega',
+    gender_gamma: 'Gamma',
+    label_birthdate: 'Birthdate',
+    bp_day: 'Day',
+    bp_month: 'Month',
+    bp_year: 'Year',
+    month_1: 'January', month_2: 'February', month_3: 'March', month_4: 'April',
+    month_5: 'May', month_6: 'June', month_7: 'July', month_8: 'August',
+    month_9: 'September', month_10: 'October', month_11: 'November', month_12: 'December',
+    label_description: 'Short description',
+    placeholder_description: 'A few words about the character',
+    btn_delete_character: 'Delete character',
+    toast_uploading_photo: 'Uploading photo...',
+    toast_photo_uploaded: 'Photo uploaded.',
+    toast_enter_name: 'Enter a name.',
+    toast_upload_photo: 'Upload a photo.',
+    toast_saved: 'Saved.',
+    confirm_delete_character: 'Delete this character? Messages they sent will stay in the chats.',
+    toast_character_deleted: 'Character deleted.',
+
+    character_pick_title: 'Who are you speaking as?',
+    empty_character_pick: "You don't have any characters yet.<br />Create at least one to write in this location.",
+    empty_sms_threads: 'No conversations yet.<br />Start a new one.',
+    btn_choose_photo: 'Choose a photo',
+    toast_create_own_character_first: 'Create your own character first.',
+    toast_other_has_no_characters: 'The other person has no characters yet.',
+    toast_choose_own_character: 'Choose your character.',
+    toast_choose_other_character: 'Choose the other character.',
+
+    label_view_description: 'Description',
+    toast_character_not_found: 'Character not found.',
+    no_description: 'No description.',
+
+    btn_write_sms: '+ New SMS',
+    sms_new_title: 'New conversation',
+    label_from_character: 'From (your character)',
+    label_to_character: 'To (the other character)',
+    btn_start_conversation: 'Start conversation',
+    default_interlocutor: 'Contact',
+    default_subtitle_prefix: 'as...',
+    as_prefix: 'as ',
+
+    default_location_title: 'Location',
+    change_character_title: 'Switch character',
+    attention_title: 'Heads up!',
+    attention_sub: "Your reply may affect the character's reaction.",
+    edit_message_banner: 'Editing message',
+    hide_until_tap: 'Hide until tapped',
+    tap_to_view: 'Tap to view',
+    toast_choose_character_first: 'Choose a character first.',
+    toast_photo_ready: 'Photo ready to send.',
+
+    back_to_chat: '&larr; Back to chat',
+    settings_title: 'Location settings',
+    label_bg: 'Location background',
+    label_music: 'Music (YouTube link)',
+    danger_zone: 'Danger zone',
+    btn_delete_location: 'Delete location',
+    toast_bg_updated: 'Background updated.',
+    toast_location_deleted: 'Location deleted.',
+    toast_music_saved: 'Music saved.',
+    toast_music_link_missing: "No music link set. Add one in the location's settings.",
+    confirm_delete_location: function (name) { return 'Delete location "' + name + '"? Messages, background and music will be lost forever.'; },
+
+    playback_waiting_ready: function (ready, total) { return 'Waiting for others: ' + ready + ' of ' + total + ' ready...'; },
+    playback_someone_offers: 'Someone wants to play music in the location.',
+    btn_ready: 'Ready',
+    btn_start_without_others: 'Start without others',
+  },
+};
+var uiLang = 'ru';
+function t(key) {
+  var v = (I18N[uiLang] && I18N[uiLang][key] !== undefined) ? I18N[uiLang][key] : I18N.ru[key];
+  return v === undefined ? key : v;
+}
+function applyStaticTranslations() {
+  document.querySelectorAll('[data-i18n]').forEach(function (el) {
+    el.innerHTML = t(el.getAttribute('data-i18n'));
+  });
+  document.querySelectorAll('[data-i18n-ph]').forEach(function (el) {
+    el.placeholder = t(el.getAttribute('data-i18n-ph'));
+  });
+  document.querySelectorAll('[data-i18n-title]').forEach(function (el) {
+    el.title = t(el.getAttribute('data-i18n-title'));
+  });
+  document.title = t('app_title');
+  updateThemeLangCaptions();
+}
+function setLang(lang) {
+  uiLang = lang === 'en' ? 'en' : 'ru';
+  try { localStorage.setItem('lang', uiLang); } catch (e) {}
+  applyStaticTranslations();
+  refreshDynamicTranslations();
+}
+function toggleLang() {
+  setLang(document.getElementById('lang-toggle-input').checked ? 'en' : 'ru');
+}
+function refreshDynamicTranslations() {
+  if (typeof renderCategories === 'function' && allClubs) renderCategories();
+  if (typeof loadUsersList === 'function') loadUsersList();
+}
+(function () {
+  var savedLang = 'ru';
+  try { savedLang = localStorage.getItem('lang') || 'ru'; } catch (e) {}
+  uiLang = savedLang;
+})();
 (function () {
   var savedTheme = 'dark';
   try { savedTheme = localStorage.getItem('theme') || 'dark'; } catch (e) {}
   applyTheme(savedTheme);
+  applyStaticTranslations();
 })();
 
 var screens = {
@@ -901,7 +1226,8 @@ function escapeHtml(s) {
   });
 }
 
-function ruYears(n) {
+function formatYears(n) {
+  if (uiLang === 'en') return n + (n === 1 ? ' year' : ' years');
   var n10 = n % 10, n100 = n % 100;
   if (n10 === 1 && n100 !== 11) return n + ' год';
   if (n10 >= 2 && n10 <= 4 && (n100 < 10 || n100 >= 20)) return n + ' года';
@@ -925,7 +1251,7 @@ function formatBirthdate(iso) {
   if (parts.length !== 3) return iso;
   var display = parts[2] + '.' + parts[1] + '.' + parts[0];
   var age = calculateAge(iso);
-  return (age !== null && age >= 0) ? display + ' (' + ruYears(age) + ')' : display;
+  return (age !== null && age >= 0) ? display + ' (' + formatYears(age) + ')' : display;
 }
 
 function api(path, options) {
@@ -933,7 +1259,7 @@ function api(path, options) {
   options.headers = Object.assign({ 'X-Tg-Init-Data': (tg && tg.initData) || '' }, options.headers || {});
   return fetch(path, options).then(function (r) {
     return r.json().then(function (data) {
-      if (!r.ok) throw new Error(data.error || 'Ошибка сервера');
+      if (!r.ok) throw new Error(data.error || t('server_error'));
       return data;
     });
   });
@@ -966,7 +1292,7 @@ function renderUsersList(users) {
 }
 
 function openUserCharacters(userId, name) {
-  document.getElementById('user-characters-title').textContent = 'Персонажи: ' + name;
+  document.getElementById('user-characters-title').textContent = t('user_characters_prefix') + name;
   api('/api/user-characters?user_id=' + encodeURIComponent(userId)).then(function (data) {
     var chars = data.characters || [];
     var list = document.getElementById('user-characters-list');
@@ -1008,7 +1334,7 @@ function renderCategories() {
   var byCategory = {};
   var order = [];
   allClubs.forEach(function (c) {
-    var cat = (c.category || 'Без категории').trim() || 'Без категории';
+    var cat = (c.category || t('uncategorized')).trim() || t('uncategorized');
     if (!byCategory[cat]) { byCategory[cat] = []; order.push(cat); }
     byCategory[cat].push(c);
   });
@@ -1029,7 +1355,7 @@ function openCategory(cat) {
   document.getElementById('category-title').textContent = cat;
   var list = document.getElementById('category-list');
   list.innerHTML = '';
-  allClubs.filter(function (c) { return ((c.category || 'Без категории').trim() || 'Без категории') === cat; })
+  allClubs.filter(function (c) { return ((c.category || t('uncategorized')).trim() || t('uncategorized')) === cat; })
     .forEach(function (c) {
       var card = document.createElement('div');
       card.className = 'club-card';
@@ -1043,8 +1369,8 @@ function openCategory(cat) {
 function createClub() {
   var category = document.getElementById('create-category').value.trim();
   var name = document.getElementById('create-name').value.trim();
-  if (!category) return showToast('Введите категорию.');
-  if (!name) return showToast('Введите название.');
+  if (!category) return showToast(t('toast_enter_category'));
+  if (!name) return showToast(t('toast_enter_location_name'));
   api('/api/clubs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ category: category, name: name }) })
     .then(function (data) {
       document.getElementById('create-category').value = '';
@@ -1155,7 +1481,7 @@ function genderBadge(g) {
 
 // Полная подпись (значок + слово) - только для анкеты персонажа, не для списков.
 function genderLabelFull(g) {
-  return g === 'alpha' ? '&#9794; Альфа' : g === 'omega' ? '&#9792; Омега' : g === 'gamma' ? '&#9893; Гамма' : '';
+  return g === 'alpha' ? '&#9794; ' + t('gender_alpha') : g === 'omega' ? '&#9792; ' + t('gender_omega') : g === 'gamma' ? '&#9893; ' + t('gender_gamma') : '';
 }
 
 function genderBadgeFull(g) {
@@ -1168,13 +1494,13 @@ function openCharacterView(id, returnTo) {
   characterViewReturnTo = returnTo || 'chat';
   api('/api/character-view?id=' + id).then(function (data) {
     var ch = data.character;
-    if (!ch) return showToast('Персонаж не найден.');
+    if (!ch) return showToast(t('toast_character_not_found'));
     document.getElementById('character-view-avatar').src = '/api/tg-photo?file_id=' + encodeURIComponent(ch.avatar_file_id);
     document.getElementById('character-view-name').innerHTML = escapeHtml(ch.name) + genderBadgeFull(ch.gender);
     var birthdateEl = document.getElementById('character-view-birthdate');
     birthdateEl.textContent = ch.birthdate ? formatBirthdate(ch.birthdate) : '';
     birthdateEl.style.display = ch.birthdate ? 'block' : 'none';
-    document.getElementById('character-view-description').textContent = ch.description || 'Без описания.';
+    document.getElementById('character-view-description').textContent = ch.description || t('no_description');
     showScreen('characterView');
   }).catch(function (e) { showToast(e.message); });
 }
@@ -1187,18 +1513,16 @@ function pad2(n) { return n < 10 ? '0' + n : String(n); }
 
 function populateBirthdateSelects() {
   var daySel = document.getElementById('character-birthdate-day');
-  if (daySel.options.length) return;
-  daySel.innerHTML = '<option value="">День</option>';
+  daySel.innerHTML = '<option value="">' + t('bp_day') + '</option>';
   for (var d = 1; d <= 31; d++) daySel.innerHTML += '<option value="' + pad2(d) + '">' + d + '</option>';
 
   var monthSel = document.getElementById('character-birthdate-month');
-  var months = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
-  monthSel.innerHTML = '<option value="">Месяц</option>';
-  months.forEach(function (name, i) { monthSel.innerHTML += '<option value="' + pad2(i + 1) + '">' + name + '</option>'; });
+  monthSel.innerHTML = '<option value="">' + t('bp_month') + '</option>';
+  for (var m = 1; m <= 12; m++) monthSel.innerHTML += '<option value="' + pad2(m) + '">' + t('month_' + m) + '</option>';
 
   var yearSel = document.getElementById('character-birthdate-year');
   var thisYear = new Date().getFullYear();
-  yearSel.innerHTML = '<option value="">Год</option>';
+  yearSel.innerHTML = '<option value="">' + t('bp_year') + '</option>';
   for (var y = thisYear; y >= thisYear - 100; y--) yearSel.innerHTML += '<option value="' + y + '">' + y + '</option>';
 }
 
@@ -1221,7 +1545,7 @@ function openCharacterEdit(ch, returnTo) {
   characterEditingId = ch ? ch.id : null;
   characterAvatarFileId = ch ? ch.avatar_file_id : null;
   editingGender = null;
-  document.getElementById('character-edit-title').textContent = ch ? 'Редактирование персонажа' : 'Новый персонаж';
+  document.getElementById('character-edit-title').textContent = ch ? t('character_edit_title_edit') : t('character_edit_title_new');
   document.getElementById('character-name').value = ch ? ch.name : '';
   populateBirthdateSelects();
   setBirthdateSelects(ch ? ch.birthdate : '');
@@ -1229,15 +1553,15 @@ function openCharacterEdit(ch, returnTo) {
   pickGender(ch && ch.gender ? ch.gender : null);
   var preview = document.getElementById('character-avatar-preview');
   var hint = document.getElementById('character-avatar-hint');
-  if (ch) { preview.src = '/api/tg-photo?file_id=' + encodeURIComponent(ch.avatar_file_id); preview.style.display = 'block'; hint.textContent = 'Заменить фото'; }
-  else { preview.style.display = 'none'; hint.textContent = 'Загрузить фото'; }
+  if (ch) { preview.src = '/api/tg-photo?file_id=' + encodeURIComponent(ch.avatar_file_id); preview.style.display = 'block'; hint.textContent = t('avatar_upload_replace'); }
+  else { preview.style.display = 'none'; hint.textContent = t('avatar_upload_new'); }
   document.getElementById('character-delete-row').style.display = ch ? 'block' : 'none';
   showScreen('characterEdit');
 }
 
 function onCharacterAvatarPicked(file) {
   if (!file) return;
-  showToast('Загружаю фото...');
+  showToast(t('toast_uploading_photo'));
   fetch('/api/character-photo', {
     method: 'POST',
     headers: { 'Content-Type': file.type || 'image/jpeg', 'X-Tg-Init-Data': (tg && tg.initData) || '' },
@@ -1248,8 +1572,8 @@ function onCharacterAvatarPicked(file) {
       var preview = document.getElementById('character-avatar-preview');
       preview.src = '/api/tg-photo?file_id=' + encodeURIComponent(data.avatar_file_id);
       preview.style.display = 'block';
-      document.getElementById('character-avatar-hint').textContent = 'Заменить фото';
-      showToast('Фото загружено.');
+      document.getElementById('character-avatar-hint').textContent = t('avatar_upload_replace');
+      showToast(t('toast_photo_uploaded'));
     }).catch(function (e) { showToast(e.message); });
 }
 
@@ -1257,15 +1581,15 @@ function saveCharacter() {
   var name = document.getElementById('character-name').value.trim();
   var birthdate = getBirthdateValue();
   var description = document.getElementById('character-description').value.trim();
-  if (!name) return showToast('Введите имя.');
-  if (!characterAvatarFileId) return showToast('Загрузите фото.');
+  if (!name) return showToast(t('toast_enter_name'));
+  if (!characterAvatarFileId) return showToast(t('toast_upload_photo'));
 
   var body = JSON.stringify({ name: name, birthdate: birthdate, description: description, avatar_file_id: characterAvatarFileId, gender: editingGender });
   var req = characterEditingId
     ? api('/api/character?id=' + characterEditingId, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: body })
     : api('/api/characters', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: body });
 
-  req.then(function () { showToast('Сохранено.'); backFromCharacterEdit(); }).catch(function (e) { showToast(e.message); });
+  req.then(function () { showToast(t('toast_saved')); backFromCharacterEdit(); }).catch(function (e) { showToast(e.message); });
 }
 
 function deleteCharacter() {
@@ -1273,10 +1597,10 @@ function deleteCharacter() {
   var id = characterEditingId;
   var doDelete = function () {
     api('/api/character?id=' + id, { method: 'DELETE' })
-      .then(function () { showToast('Персонаж удалён.'); openCharactersScreen(); })
+      .then(function () { showToast(t('toast_character_deleted')); openCharactersScreen(); })
       .catch(function (e) { showToast(e.message); });
   };
-  var message = 'Удалить этого персонажа? Отправленные им сообщения останутся в чатах.';
+  var message = t('confirm_delete_character');
   if (tg && tg.showConfirm) tg.showConfirm(message, function (ok) { if (ok) doDelete(); });
   else if (window.confirm(message)) doDelete();
 }
@@ -1296,15 +1620,15 @@ function openSmsListScreen() {
     if (!data.threads.length) { empty.style.display = 'block'; }
     else {
       empty.style.display = 'none';
-      data.threads.forEach(function (t) {
+      data.threads.forEach(function (thread) {
         var card = document.createElement('div');
         card.className = 'sms-thread-card';
-        card.innerHTML = '<img class="avatar-thumb" src="/api/tg-photo?file_id=' + encodeURIComponent(t.other_character.avatar_file_id) + '">' +
-          '<div class="info"><div class="name">' + escapeHtml(t.other_character.name) +
-          (t.unread ? ' <span class="unread-dot"></span>' : '') + '</div>' +
-          '<div class="sub">от лица ' + escapeHtml(t.my_character.name) + '</div></div>' +
+        card.innerHTML = '<img class="avatar-thumb" src="/api/tg-photo?file_id=' + encodeURIComponent(thread.other_character.avatar_file_id) + '">' +
+          '<div class="info"><div class="name">' + escapeHtml(thread.other_character.name) +
+          (thread.unread ? ' <span class="unread-dot"></span>' : '') + '</div>' +
+          '<div class="sub">' + t('as_prefix') + escapeHtml(thread.my_character.name) + '</div></div>' +
           '<span class="arrow">&rarr;</span>';
-        card.onclick = function () { openSmsChat(t.id, t.my_character, t.other_character); };
+        card.onclick = function () { openSmsChat(thread.id, thread.my_character, thread.other_character); };
         list.appendChild(card);
       });
     }
@@ -1328,7 +1652,7 @@ function renderSmsCharacterPickList(containerId, list, which) {
   if (!list.length) {
     var hint = document.createElement('div');
     hint.className = 'empty-hint';
-    hint.textContent = which === 'mine' ? 'Сначала создайте своего персонажа.' : 'У второго человека пока нет персонажей.';
+    hint.textContent = which === 'mine' ? t('toast_create_own_character_first') : t('toast_other_has_no_characters');
     el.appendChild(hint);
     return;
   }
@@ -1349,8 +1673,8 @@ function renderSmsCharacterPickList(containerId, list, which) {
 }
 
 function startSmsThread() {
-  if (!smsSelectedMineId) return showToast('Выберите своего персонажа.');
-  if (!smsSelectedOtherId) return showToast('Выберите персонажа собеседника.');
+  if (!smsSelectedMineId) return showToast(t('toast_choose_own_character'));
+  if (!smsSelectedOtherId) return showToast(t('toast_choose_other_character'));
   api('/api/sms-threads', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ my_character_id: smsSelectedMineId, other_character_id: smsSelectedOtherId })
@@ -1367,7 +1691,7 @@ function openSmsChat(threadId, myCharacter, otherCharacter) {
   cancelSmsEdit();
   document.getElementById('sms-messages').innerHTML = '';
   document.getElementById('sms-chat-title').textContent = otherCharacter.name;
-  document.getElementById('sms-chat-subtitle').textContent = 'от лица ' + myCharacter.name;
+  document.getElementById('sms-chat-subtitle').textContent = t('as_prefix') + myCharacter.name;
   showScreen('smsChat');
   pollSmsMessages();
   if (smsPollTimer) clearInterval(smsPollTimer);
@@ -1392,7 +1716,7 @@ function renderSmsMessage(m) {
   div.className = 'sms-msg ' + (mine ? 'mine' : 'theirs');
   div.dataset.id = m.id;
   var time = parseDbTime(m.created_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
-  var editedTag = m.edited_at ? ' <span class="edited-tag">(изменено)</span>' : '';
+  var editedTag = m.edited_at ? ' <span class="edited-tag">' + t('edited_tag') + '</span>' : '';
   var tick = mine ? ' ' + smsTickHtml(m.id) : '';
   var avatarHtml = m.character_avatar_file_id
     ? '<img class="msg-avatar" src="/api/tg-photo?file_id=' + encodeURIComponent(m.character_avatar_file_id) + '">'
@@ -1564,12 +1888,12 @@ function renderMessage(m) {
   div.className = 'msg ' + (mine ? 'mine' : 'theirs');
   div.dataset.id = m.id;
   var time = parseDbTime(m.created_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
-  var editedTag = m.edited_at ? ' <span class="edited-tag">(изменено)</span>' : '';
+  var editedTag = m.edited_at ? ' <span class="edited-tag">' + t('edited_tag') + '</span>' : '';
   var tick = mine ? ' ' + tickHtml(m.id) : '';
   var avatarHtml = m.character_avatar_file_id
     ? '<img class="msg-avatar" src="/api/tg-photo?file_id=' + encodeURIComponent(m.character_avatar_file_id) + '">'
     : '';
-  var whoLabel = m.character_name || m.user_name || 'Гость';
+  var whoLabel = m.character_name || m.user_name || t('guest');
   var bodyHtml = m.is_attention
     ? '<div class="ooc-note">&#9888; ' + formatMessageText(m.text.slice(1, -1)) + '</div>'
     : formatMessageText(m.text);
@@ -1578,7 +1902,7 @@ function renderMessage(m) {
     var isBlurred = !!m.photo_blurred && !m.photo_revealed;
     photoHtml = '<div class="msg-photo-wrap' + (isBlurred ? ' blurred' : '') + '">' +
       '<img class="msg-photo" src="/api/tg-photo?file_id=' + encodeURIComponent(m.photo_file_id) + '">' +
-      (isBlurred ? '<div class="msg-photo-reveal-hint"><span class="eye">&#128065;</span>Нажмите, чтобы посмотреть</div>' : '') +
+      (isBlurred ? '<div class="msg-photo-reveal-hint"><span class="eye">&#128065;</span>' + t('tap_to_view') + '</div>' : '') +
       '</div>';
   }
   var textHtml = m.text ? ('<div>' + bodyHtml + '</div>') : '';
@@ -1688,7 +2012,7 @@ function cancelEdit() {
 
 function onMessagePhotoPicked(file) {
   if (!file) return;
-  showToast('Загружаю фото...');
+  showToast(t('toast_uploading_photo'));
   fetch('/api/message-photo', {
     method: 'POST',
     headers: { 'Content-Type': file.type || 'image/jpeg', 'X-Tg-Init-Data': (tg && tg.initData) || '' },
@@ -1699,7 +2023,7 @@ function onMessagePhotoPicked(file) {
       document.getElementById('photo-attach-thumb').src = '/api/tg-photo?file_id=' + encodeURIComponent(pendingPhotoFileId);
       document.getElementById('photo-attach-blur-check').checked = false;
       document.getElementById('photo-attach-preview').style.display = 'flex';
-      showToast('Фото готово к отправке.');
+      showToast(t('toast_photo_ready'));
     }).catch(function (e) { showToast(e.message); });
 }
 
@@ -1732,7 +2056,7 @@ function sendMessage() {
   }
 
   if ((!text && !pendingPhotoFileId) || !currentClub) return;
-  if (!activeCharacter) return showToast('Сначала выберите персонажа.');
+  if (!activeCharacter) return showToast(t('toast_choose_character_first'));
   var photoFileId = pendingPhotoFileId;
   var photoBlurred = document.getElementById('photo-attach-blur-check').checked;
   input.value = '';
@@ -1764,7 +2088,7 @@ function openSettings() {
 
 function uploadBackground(file) {
   if (!file || !currentClub) return;
-  showToast('Загружаю фото...');
+  showToast(t('toast_uploading_photo'));
   fetch('/api/club-background?id=' + currentClub.id, {
     method: 'POST',
     headers: { 'Content-Type': file.type || 'image/jpeg', 'X-Tg-Init-Data': (tg && tg.initData) || '' },
@@ -1777,7 +2101,7 @@ function uploadBackground(file) {
       var bgUrl = backgroundImageUrl(currentClub);
       document.getElementById('bg-preview').src = bgUrl;
       document.getElementById('bg-preview').style.display = 'block';
-      showToast('Фон обновлён.');
+      showToast(t('toast_bg_updated'));
     }).catch(function (e) { showToast(e.message); });
 }
 
@@ -1794,10 +2118,10 @@ function deleteLocation() {
         currentClub = null;
         showScreen('list');
         loadClubs();
-        showToast('Локация удалена.');
+        showToast(t('toast_location_deleted'));
       }).catch(function (e) { showToast(e.message); });
   };
-  var message = 'Удалить локацию «' + club.name + '»? Сообщения, фон и музыка будут потеряны безвозвратно.';
+  var message = t('confirm_delete_location')(club.name);
   if (tg && tg.showConfirm) {
     tg.showConfirm(message, function (ok) { if (ok) doDelete(); });
   } else if (window.confirm(message)) {
@@ -1813,7 +2137,7 @@ function saveMusic() {
       currentClub.music_url = url || null;
       cuedVideoId = null;
       stopLocalPlayback();
-      showToast('Музыка сохранена.');
+      showToast(t('toast_music_saved'));
     }).catch(function (e) { showToast(e.message); });
 }
 
@@ -1925,7 +2249,7 @@ function toggleMusic() {
 function requestStartMusic() {
   if (!currentClub) return;
   var videoId = extractYouTubeId(currentClub.music_url);
-  if (!videoId) return showToast('Ссылка на музыку не задана. Добавьте её в настройках клуба.');
+  if (!videoId) return showToast(t('toast_music_link_missing'));
   ensurePlayer(videoId).then(unlockAudioGesture);
   api('/api/club-playback-start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ club_id: currentClub.id }) })
     .then(pollPlayback).catch(function (e) { showToast(e.message); pollPlayback(); });
@@ -1957,11 +2281,11 @@ function renderPlaybackBanner(s) {
     var iAmReady = s.ready_user_ids.indexOf(uid) !== -1;
     var iAmInitiator = String(s.initiated_by) === uid;
     var txt = iAmReady
-      ? 'Ждём остальных: готовы ' + s.ready_user_ids.length + ' из ' + s.total_members + '...'
-      : 'Кто-то предлагает включить музыку в клубе.';
+      ? t('playback_waiting_ready')(s.ready_user_ids.length, s.total_members)
+      : t('playback_someone_offers');
     var btns = '';
-    if (!iAmReady) btns += '<button onclick="markReady()">Готов</button>';
-    if (iAmInitiator) btns += '<button class="secondary" onclick="forceStart()">Начать без остальных</button>';
+    if (!iAmReady) btns += '<button onclick="markReady()">' + t('btn_ready') + '</button>';
+    if (iAmInitiator) btns += '<button class="secondary" onclick="forceStart()">' + t('btn_start_without_others') + '</button>';
     el.innerHTML = '<div class="txt">' + txt + '</div>' + btns;
     el.classList.add('show');
   } else {
