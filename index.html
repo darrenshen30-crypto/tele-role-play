@@ -464,9 +464,68 @@
     background: var(--btn-bottom); transition: transform 0.2s;
   }
   .theme-toggle input:checked ~ .theme-toggle-track .theme-toggle-thumb { transform: translateX(21px); }
+
+  /* ---- сплэш-экран при запуске ---- */
+  #screen-splash {
+    position: fixed; inset: 0; z-index: 200;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--bg); transition: opacity 0.45s ease;
+  }
+  #screen-splash.hide { opacity: 0; pointer-events: none; }
+  .splash-content { display: flex; flex-direction: column; align-items: center; gap: 22px; }
+  .splash-mark-wrap { position: relative; width: 118px; height: 118px; display: flex; align-items: center; justify-content: center; }
+  .splash-ring {
+    position: absolute; inset: 0; border-radius: 50%; border: 1.5px solid var(--amber);
+    opacity: 0; animation: splash-ring-anim 1.1s ease-out 0.5s 1 forwards;
+  }
+  .splash-mark {
+    width: 100%; height: 100%; opacity: 0; filter: blur(14px); transform: scale(0.72);
+    animation: splash-mark-anim 0.85s cubic-bezier(0.22,1,0.36,1) 0.05s 1 forwards;
+  }
+  .splash-word {
+    font-family: 'Cormorant Garamond', serif; font-weight: 600; font-size: 40px; color: var(--ink);
+    clip-path: inset(0 100% 0 0);
+    animation: splash-reveal-anim 0.6s cubic-bezier(0.65,0,0.35,1) 0.85s 1 forwards;
+  }
+  .splash-tagline {
+    display: flex; flex-direction: column; align-items: center; gap: 5px;
+    font-size: 13px; color: var(--ink-soft); text-align: center;
+    clip-path: inset(0 100% 0 0);
+    animation: splash-reveal-anim 0.6s cubic-bezier(0.65,0,0.35,1) 1.15s 1 forwards;
+  }
+  @keyframes splash-mark-anim {
+    0%   { opacity: 0; filter: blur(14px); transform: scale(0.72); }
+    100% { opacity: 1; filter: blur(0); transform: scale(1); }
+  }
+  @keyframes splash-ring-anim {
+    0%   { opacity: 0.7; transform: scale(0.6); }
+    100% { opacity: 0; transform: scale(1.9); }
+  }
+  @keyframes splash-reveal-anim {
+    0%   { clip-path: inset(0 100% 0 0); }
+    100% { clip-path: inset(0 0% 0 0); }
+  }
 </style>
 </head>
 <body>
+
+<div id="screen-splash">
+  <div class="splash-content">
+    <div class="splash-mark-wrap">
+      <div class="splash-ring"></div>
+      <svg class="splash-mark" viewBox="0 0 200 200" style="color: var(--ink);">
+        <path d="M72,152 C42,152 34,122 50,102 C64,85 90,85 100,102 L100,152" fill="none" stroke="currentColor" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M100,152 L100,38 C100,38 132,29 152,54 C170,76 159,106 130,111 L88,111" fill="none" stroke="currentColor" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M88,111 L132,152" fill="none" stroke="currentColor" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+    <div class="splash-word">LorePlay</div>
+    <div class="splash-tagline">
+      <div>Where role turns into lore.</div>
+      <div>역할이 서사가 되는 곳</div>
+    </div>
+  </div>
+</div>
 
 <div id="screen-list" class="screen active">
   <div class="theme-row">
@@ -1929,9 +1988,17 @@ function pollPlayback() {
 
 // ---------- запуск ----------
 
+function dismissSplash() {
+  var splash = document.getElementById('screen-splash');
+  if (!splash) return;
+  splash.classList.add('hide');
+  setTimeout(function () { splash.style.display = 'none'; }, 500);
+}
+
 function init() {
   showScreen('list');
   loadUsersList();
+  setTimeout(dismissSplash, 2600);
 }
 init();
 </script>
