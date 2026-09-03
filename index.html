@@ -67,8 +67,50 @@
   .list-title { font-size: 34px; color: var(--amber-soft); margin: 6px 0 4px; text-align: center; }
   .list-sub { text-align: center; color: var(--ink-soft); font-size: 13px; margin-bottom: 26px; }
 
+  /* ---- приветствие и часы на главной ---- */
+  .greeting-title { font-size: 27px; margin: 4px 0 3px; color: var(--ink); }
+  .greeting-sub { font-size: 13.5px; color: var(--ink-soft); line-height: 1.4; margin-bottom: 16px; max-width: 88%; }
+  .clock-row {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 12px; color: var(--ink-soft);
+    background: var(--bg-soft); border: 1px solid var(--line);
+    border-radius: 20px; padding: 5px 14px; margin-bottom: 20px;
+  }
+
+  /* ---- заголовки разделов главной ---- */
+  .section-header { display: flex; align-items: baseline; justify-content: space-between; margin: 24px 0 10px; }
+  .section-header .section-title { font-size: 12px; letter-spacing: 0.09em; text-transform: uppercase; color: var(--ink-soft); font-weight: 700; }
+  .section-link { font-size: 13px; color: var(--amber); cursor: pointer; font-weight: 700; }
+
+  /* ---- карточки локаций/SMS/труппы сеткой ---- */
+  .grid-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .grid-card {
+    position: relative;
+    background: linear-gradient(180deg, var(--panel), var(--bg-soft));
+    border: 1px solid var(--line); border-radius: 14px;
+    padding: 14px 10px 12px; cursor: pointer;
+    display: flex; flex-direction: column; gap: 7px; min-height: 90px;
+  }
+  .grid-card-icon { font-size: 18px; line-height: 1; }
+  .grid-card-name { font-family: 'Cormorant Garamond', serif; font-size: 15px; color: var(--ink); line-height: 1.2; }
+  .grid-card-count { font-size: 10.5px; color: var(--ink-soft); }
+  .grid-card-dot { position: absolute; top: 12px; right: 12px; width: 7px; height: 7px; border-radius: 50%; background: var(--wine); }
+  .grid-card.create { align-items: flex-start; justify-content: center; border-style: dashed; color: var(--ink-soft); }
+  .grid-card.create .grid-card-name { color: var(--ink-soft); font-size: 13.5px; font-family: inherit; font-weight: 700; }
+
+  .search-row { display: flex; gap: 8px; margin-top: 24px; }
+  .search-row input {
+    flex: 1; background: var(--bg-soft); border: 1px solid var(--line); border-radius: 24px;
+    padding: 12px 16px; color: var(--ink); font-size: 14px;
+  }
+  .search-row input:focus { outline: none; border-color: var(--amber); }
+  .search-add-btn {
+    width: 46px; height: 46px; border-radius: 50%; flex-shrink: 0;
+    background: var(--btn-bottom); color: #221a12; border: none; font-size: 20px;
+  }
+
   /* ---- список пользователей на стартовом экране ---- */
-  .users-row { display: flex; gap: 16px; overflow-x: auto; padding: 2px 2px 4px; margin-bottom: 22px; justify-content: center; }
+  .users-row { display: flex; gap: 16px; overflow-x: auto; padding: 2px 2px 4px; margin-bottom: 4px; justify-content: flex-start; }
   .user-chip { display: flex; flex-direction: column; align-items: center; gap: 5px; flex-shrink: 0; width: 64px; cursor: pointer; }
   .user-chip-avatar-wrap { position: relative; }
   .user-chip-avatar {
@@ -540,17 +582,45 @@
 </div>
 
 <div id="screen-list" class="screen active">
-  <div class="list-title" data-i18n="home_title">Локации</div>
-  <div class="list-sub" data-i18n="home_sub">Тайные комнаты для совместных историй</div>
+  <div class="greeting-title" id="greeting-title">Добрый вечер!</div>
+  <div class="greeting-sub" id="greeting-sub" data-i18n="greeting_sub">вот что происходит в ваших историях.</div>
+  <div class="clock-row"><span id="clock-time">--:--</span>&nbsp;&middot;&nbsp;<span id="online-count-text"></span></div>
   <div id="users-row" class="users-row"></div>
-  <div id="categories-list"></div>
+
+  <div class="section-header">
+    <span class="section-title" data-i18n="section_locations">ЛОКАЦИИ</span>
+    <span class="section-link" onclick="showScreen('create')" data-i18n="section_new">+ Новая</span>
+  </div>
+  <div id="categories-list" class="grid-cards"></div>
   <div id="clubs-empty" class="empty-hint" style="display:none;" data-i18n="empty_locations">
     Пока нет ни одной локации.<br />Создайте первую.
   </div>
-  <div class="btn-row">
-    <button class="primary-btn" onclick="showScreen('create')" data-i18n="btn_create_location">+ Создать локацию</button>
-    <button class="ghost-btn" onclick="openCharactersScreen()" data-i18n="btn_my_characters">Мои персонажи</button>
-    <button class="ghost-btn" onclick="openSmsListScreen()" data-i18n="btn_sms">SMS</button>
+
+  <div class="section-header">
+    <span class="section-title" data-i18n="section_more">ЕЩЁ</span>
+  </div>
+  <div class="grid-cards">
+    <div class="grid-card" onclick="openSmsListScreen()">
+      <span class="grid-card-dot" id="sms-unread-dot" style="display:none;"></span>
+      <span class="grid-card-icon">&#9993;</span>
+      <span class="grid-card-name" data-i18n="btn_sms">SMS</span>
+      <span class="grid-card-count" id="sms-count-text"></span>
+    </div>
+    <div class="grid-card" onclick="openCharactersScreen()">
+      <span class="grid-card-icon">&#128100;</span>
+      <span class="grid-card-name" data-i18n="btn_my_characters">Мои персонажи</span>
+      <span class="grid-card-count" id="troupe-count-text"></span>
+    </div>
+    <div class="grid-card create" onclick="showScreen('create')">
+      <span class="grid-card-icon">+</span>
+      <span class="grid-card-name" data-i18n="create_card_title">Создать локацию</span>
+      <span class="grid-card-count" data-i18n="create_card_sub">новая история</span>
+    </div>
+  </div>
+
+  <div class="search-row">
+    <input id="home-search" data-i18n-ph="search_placeholder" placeholder="найти локацию или персонажа" oninput="filterHomeCards()" />
+    <button class="search-add-btn" onclick="showScreen('create')">+</button>
   </div>
 
   <div class="settings-block">
@@ -843,6 +913,21 @@ var I18N = {
     btn_my_characters: 'Мои персонажи',
     btn_sms: 'SMS',
     empty_locations: 'Пока нет ни одной локации.<br />Создайте первую.',
+    greeting_morning: 'Доброе утро!',
+    greeting_day: 'Добрый день!',
+    greeting_evening: 'Добрый вечер!',
+    greeting_night: 'Доброй ночи!',
+    greeting_sub: 'вот что происходит в ваших историях.',
+    online_count: function (n) { return n + ' в сети'; },
+    section_locations: 'Локации',
+    section_new: '+ Новая',
+    section_more: 'Ещё',
+    rooms_count: function (n) { return n + ' ' + ruPluralWord(n, 'комната', 'комнаты', 'комнат'); },
+    sms_unread_count: function (n) { return n ? (n + ' ' + ruPluralWord(n, 'непрочитанное', 'непрочитанных', 'непрочитанных')) : 'нет непрочитанных'; },
+    troupe_count: function (n) { return n + ' в труппе'; },
+    create_card_title: 'Создать локацию',
+    create_card_sub: 'новая история',
+    search_placeholder: 'найти локацию или персонажа',
     lang_label: 'Язык интерфейса',
     lang_hint: 'Переключает весь интерфейс. Имена персонажей и сообщения остаются как есть.',
     theme_label: 'Тёмная тема',
@@ -963,6 +1048,21 @@ var I18N = {
     btn_my_characters: 'My characters',
     btn_sms: 'SMS',
     empty_locations: 'No locations yet.<br />Create the first one.',
+    greeting_morning: 'Good morning!',
+    greeting_day: 'Good afternoon!',
+    greeting_evening: 'Good evening!',
+    greeting_night: 'Good night!',
+    greeting_sub: 'here is what is happening in your stories.',
+    online_count: function (n) { return n + ' online'; },
+    section_locations: 'Locations',
+    section_new: '+ New',
+    section_more: 'More',
+    rooms_count: function (n) { return n + ' ' + (n === 1 ? 'room' : 'rooms'); },
+    sms_unread_count: function (n) { return n ? (n + ' unread') : 'no unread'; },
+    troupe_count: function (n) { return n + ' in the troupe'; },
+    create_card_title: 'Create location',
+    create_card_sub: 'new story',
+    search_placeholder: 'search locations or characters',
     lang_label: 'Interface language',
     lang_hint: 'Switches the whole interface. Character names and messages stay as written.',
     theme_label: 'Dark theme',
@@ -1097,6 +1197,8 @@ function toggleLang() {
 function refreshDynamicTranslations() {
   if (typeof renderCategories === 'function' && allClubs) renderCategories();
   if (typeof loadUsersList === 'function') loadUsersList();
+  if (typeof loadMoreSectionCounts === 'function') loadMoreSectionCounts();
+  if (typeof updateGreeting === 'function') updateGreeting();
 }
 (function () {
   var savedLang = 'ru';
@@ -1226,6 +1328,12 @@ function escapeHtml(s) {
   });
 }
 
+function ruPluralWord(n, one, few, many) {
+  var n10 = n % 10, n100 = n % 100;
+  if (n10 === 1 && n100 !== 11) return one;
+  if (n10 >= 2 && n10 <= 4 && (n100 < 10 || n100 >= 20)) return few;
+  return many;
+}
 function formatYears(n) {
   if (uiLang === 'en') return n + (n === 1 ? ' year' : ' years');
   var n10 = n % 10, n100 = n % 100;
@@ -1276,6 +1384,9 @@ function loadUsersList() {
 function renderUsersList(users) {
   var row = document.getElementById('users-row');
   row.innerHTML = '';
+  var onlineCount = users.filter(function (u) { return u.online; }).length;
+  var onlineEl = document.getElementById('online-count-text');
+  if (onlineEl) onlineEl.textContent = t('online_count')(onlineCount);
   users.forEach(function (u) {
     var chip = document.createElement('div');
     chip.className = 'user-chip';
@@ -1324,6 +1435,26 @@ function loadClubs() {
   }).catch(function (e) { showToast(e.message); });
 }
 
+var CATEGORY_ICON_MAP = [
+  { words: ['клуб', 'club', 'бар', 'ноч', 'night'], icon: '&#9789;' },
+  { words: ['дом', 'квартир', 'home', 'house', 'сем'], icon: '&#8962;' },
+  { words: ['академ', 'школ', 'универ', 'academy', 'school', 'college'], icon: '&#127891;' },
+  { words: ['улиц', 'город', 'street', 'city', 'парк', 'park'], icon: '&#127961;' },
+  { words: ['особняк', 'дворец', 'вилл', 'mansion', 'palace', 'villa'], icon: '&#127963;' },
+  { words: ['офис', 'работ', 'office', 'work'], icon: '&#128188;' },
+  { words: ['больниц', 'клиник', 'hospital', 'clinic'], icon: '&#9877;' },
+];
+function categoryIcon(name) {
+  var low = (name || '').toLowerCase();
+  for (var i = 0; i < CATEGORY_ICON_MAP.length; i++) {
+    var entry = CATEGORY_ICON_MAP[i];
+    for (var j = 0; j < entry.words.length; j++) {
+      if (low.indexOf(entry.words[j]) !== -1) return entry.icon;
+    }
+  }
+  return '&#10022;';
+}
+
 function renderCategories() {
   var list = document.getElementById('categories-list');
   var empty = document.getElementById('clubs-empty');
@@ -1340,11 +1471,16 @@ function renderCategories() {
   });
 
   order.forEach(function (cat) {
-    var hasUnread = byCategory[cat].some(function (c) { return c.unread; });
+    var rooms = byCategory[cat];
+    var hasUnread = rooms.some(function (c) { return c.unread; });
     var card = document.createElement('div');
-    card.className = 'club-card';
-    card.innerHTML = '<span class="name">' + escapeHtml(cat) + (hasUnread ? ' <span class="unread-dot"></span>' : '') + '</span>' +
-      '<span><span class="count">' + byCategory[cat].length + '</span><span class="arrow">&rarr;</span></span>';
+    card.className = 'grid-card';
+    card.dataset.search = (cat + ' ' + rooms.map(function (c) { return c.name; }).join(' ')).toLowerCase();
+    card.innerHTML =
+      (hasUnread ? '<span class="grid-card-dot"></span>' : '') +
+      '<span class="grid-card-icon">' + categoryIcon(cat) + '</span>' +
+      '<span class="grid-card-name">' + escapeHtml(cat) + '</span>' +
+      '<span class="grid-card-count">' + t('rooms_count')(rooms.length) + '</span>';
     card.onclick = function () { openCategory(cat); };
     list.appendChild(card);
   });
@@ -2319,9 +2455,54 @@ function dismissSplash() {
   setTimeout(function () { splash.style.display = 'none'; }, 500);
 }
 
+function greetingKey() {
+  var h = new Date().getHours();
+  if (h >= 5 && h < 12) return 'greeting_morning';
+  if (h >= 12 && h < 18) return 'greeting_day';
+  if (h >= 18 && h < 23) return 'greeting_evening';
+  return 'greeting_night';
+}
+function updateGreeting() {
+  var el = document.getElementById('greeting-title');
+  if (el) el.textContent = t(greetingKey());
+}
+function updateClock() {
+  var el = document.getElementById('clock-time');
+  if (!el) return;
+  var d = new Date();
+  var hh = (d.getHours() < 10 ? '0' : '') + d.getHours();
+  var mm = (d.getMinutes() < 10 ? '0' : '') + d.getMinutes();
+  el.textContent = hh + ':' + mm;
+}
+function loadMoreSectionCounts() {
+  api('/api/sms-threads').then(function (data) {
+    var threads = data.threads || [];
+    var unread = threads.filter(function (th) { return th.unread; }).length;
+    var dot = document.getElementById('sms-unread-dot');
+    if (dot) dot.style.display = unread ? 'block' : 'none';
+    var countEl = document.getElementById('sms-count-text');
+    if (countEl) countEl.textContent = t('sms_unread_count')(unread);
+  }).catch(function () {});
+  api('/api/characters').then(function (data) {
+    var countEl = document.getElementById('troupe-count-text');
+    if (countEl) countEl.textContent = t('troupe_count')((data.characters || []).length);
+  }).catch(function () {});
+}
+function filterHomeCards() {
+  var q = document.getElementById('home-search').value.trim().toLowerCase();
+  document.querySelectorAll('#categories-list .grid-card').forEach(function (card) {
+    var name = (card.dataset.search || '').toLowerCase();
+    card.style.display = (!q || name.indexOf(q) !== -1) ? '' : 'none';
+  });
+}
+
 function init() {
   showScreen('list');
+  updateGreeting();
+  updateClock();
+  setInterval(updateClock, 30000);
   loadUsersList();
+  loadMoreSectionCounts();
   setTimeout(dismissSplash, 2600);
 }
 init();
