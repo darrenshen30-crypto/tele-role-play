@@ -188,6 +188,13 @@
     display: block; margin: 0 auto 8px; border: 2px solid var(--line); background: var(--bg-soft);
   }
   .avatar-upload-hint { color: var(--amber-soft); font-size: 13px; }
+  .avatar-upload-placeholder {
+    width: 108px; height: 108px; border-radius: 50%;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+    margin: 0 auto 8px; border: 1.5px dashed var(--line); background: var(--bg-soft);
+    color: var(--ink-soft); font-size: 12px;
+  }
+  .avatar-upload-placeholder-icon { font-size: 22px; opacity: 0.7; }
   .textarea-input {
     width: 100%; min-height: 80px; resize: vertical;
     background: var(--bg-soft); border: 1px solid var(--line); border-radius: 10px;
@@ -209,7 +216,7 @@
   /* ---- пол персонажа: альфа/омега/гамма ---- */
   .gender-pick { display: flex; gap: 8px; margin-bottom: 4px; }
   .gender-opt {
-    flex: 1; padding: 11px 6px; border-radius: 10px;
+    flex: 1; padding: 11px 6px; border-radius: 20px;
     border: 1px solid var(--line); background: var(--bg-soft);
     color: var(--ink-soft); font-size: 13px; font-weight: 700;
     text-align: center; font-family: inherit;
@@ -307,8 +314,8 @@
     width: 100%;
     background: var(--bg-soft);
     border: 1px solid var(--line);
-    border-radius: 10px;
-    padding: 13px 14px;
+    border-radius: 20px;
+    padding: 13px 16px;
     color: var(--ink);
     font-size: 15px;
   }
@@ -319,7 +326,7 @@
   .birthdate-pick { display: flex; gap: 8px; }
   .birthdate-pick select {
     flex: 1; min-width: 0; text-align: center; text-align-last: center;
-    background: var(--bg-soft); border: 1px solid var(--line); border-radius: 10px;
+    background: var(--bg-soft); border: 1px solid var(--line); border-radius: 20px;
     padding: 13px 4px; color: var(--ink); font-size: 14.5px; font-family: inherit;
   }
   .birthdate-pick select.bp-month { flex: 1.7; }
@@ -732,6 +739,10 @@
 
   <label class="avatar-upload-label">
     <img id="character-avatar-preview" class="avatar-upload-preview" style="display:none;" />
+    <div id="character-avatar-placeholder" class="avatar-upload-placeholder">
+      <span class="avatar-upload-placeholder-icon">&#128247;</span>
+      <span data-i18n="avatar_upload_placeholder">фото</span>
+    </div>
     <div id="character-avatar-hint" class="avatar-upload-hint" data-i18n="avatar_upload_new">Загрузить фото</div>
     <input type="file" id="character-avatar-input" accept="image/*" onchange="onCharacterAvatarPicked(this.files[0])" />
   </label>
@@ -782,6 +793,9 @@
   </div>
   <div class="field-label" data-i18n="label_view_description">Описание</div>
   <div id="character-view-description" style="color:var(--ink); font-size:15px; line-height:1.5; white-space:pre-wrap;"></div>
+  <div class="btn-row" id="character-view-edit-row" style="display:none;">
+    <button class="ghost-btn" id="character-view-edit-btn" data-i18n="btn_edit_character">Редактировать</button>
+  </div>
 </div>
 
 <div id="screen-sms" class="screen sub-screen">
@@ -998,6 +1012,7 @@ var I18N = {
     character_edit_title_new: 'Новый персонаж',
     character_edit_title_edit: 'Редактирование персонажа',
     avatar_upload_new: 'Загрузить фото',
+    avatar_upload_placeholder: 'фото',
     avatar_upload_replace: 'Заменить фото',
     label_char_name: 'Имя',
     placeholder_char_name: 'Имя персонажа',
@@ -1015,6 +1030,7 @@ var I18N = {
     label_description: 'Краткое описание',
     placeholder_description: 'Пара слов о персонаже',
     btn_delete_character: 'Удалить персонажа',
+    btn_edit_character: 'Редактировать',
     toast_uploading_photo: 'Загружаю фото...',
     toast_photo_uploaded: 'Фото загружено.',
     toast_enter_name: 'Введите имя.',
@@ -1134,6 +1150,7 @@ var I18N = {
     character_edit_title_new: 'New character',
     character_edit_title_edit: 'Edit character',
     avatar_upload_new: 'Upload photo',
+    avatar_upload_placeholder: 'photo',
     avatar_upload_replace: 'Replace photo',
     label_char_name: 'Name',
     placeholder_char_name: 'Character name',
@@ -1151,6 +1168,7 @@ var I18N = {
     label_description: 'Short description',
     placeholder_description: 'A few words about the character',
     btn_delete_character: 'Delete character',
+    btn_edit_character: 'Edit',
     toast_uploading_photo: 'Uploading photo...',
     toast_photo_uploaded: 'Photo uploaded.',
     toast_enter_name: 'Enter a name.',
@@ -1681,11 +1699,22 @@ function openCharacterView(id, returnTo) {
     var ch = data.character;
     if (!ch) return showToast(t('toast_character_not_found'));
     document.getElementById('character-view-avatar').src = '/api/tg-photo?file_id=' + encodeURIComponent(ch.avatar_file_id);
-    document.getElementById('character-view-name').innerHTML = escapeHtml(ch.name) + genderBadgeFull(ch.gender);
+    document.getElementById('character-view-name').textContent = ch.name;
+    var metaParts = [];
+    if (ch.gender) metaParts.push(t('gender_' + ch.gender));
+    if (ch.birthdate) {
+      var bdParts = ch.birthdate.split('-');
+      metaParts.push(bdParts[2] + '.' + bdParts[1] + '.' + bdParts[0]);
+      var age = calculateAge(ch.birthdate);
+      if (age !== null && age >= 0) metaParts.push(formatYears(age));
+    }
     var birthdateEl = document.getElementById('character-view-birthdate');
-    birthdateEl.textContent = ch.birthdate ? formatBirthdate(ch.birthdate) : '';
-    birthdateEl.style.display = ch.birthdate ? 'block' : 'none';
+    birthdateEl.textContent = metaParts.join(' · ');
+    birthdateEl.style.display = metaParts.length ? 'block' : 'none';
     document.getElementById('character-view-description').textContent = ch.description || t('no_description');
+    var isMine = ch.owner_id && myUserId() && String(ch.owner_id) === myUserId();
+    document.getElementById('character-view-edit-row').style.display = isMine ? 'block' : 'none';
+    document.getElementById('character-view-edit-btn').onclick = function () { openCharacterEdit(ch); };
     showScreen('characterView');
   }).catch(function (e) { showToast(e.message); });
 }
@@ -1737,9 +1766,16 @@ function openCharacterEdit(ch, returnTo) {
   document.getElementById('character-description').value = ch ? (ch.description || '') : '';
   pickGender(ch && ch.gender ? ch.gender : null);
   var preview = document.getElementById('character-avatar-preview');
+  var placeholder = document.getElementById('character-avatar-placeholder');
   var hint = document.getElementById('character-avatar-hint');
-  if (ch) { preview.src = '/api/tg-photo?file_id=' + encodeURIComponent(ch.avatar_file_id); preview.style.display = 'block'; hint.textContent = t('avatar_upload_replace'); }
-  else { preview.style.display = 'none'; hint.textContent = t('avatar_upload_new'); }
+  if (ch) {
+    preview.src = '/api/tg-photo?file_id=' + encodeURIComponent(ch.avatar_file_id);
+    preview.style.display = 'block'; placeholder.style.display = 'none';
+    hint.textContent = t('avatar_upload_replace');
+  } else {
+    preview.style.display = 'none'; placeholder.style.display = 'flex';
+    hint.textContent = t('avatar_upload_new');
+  }
   document.getElementById('character-delete-row').style.display = ch ? 'block' : 'none';
   showScreen('characterEdit');
 }
@@ -1757,6 +1793,7 @@ function onCharacterAvatarPicked(file) {
       var preview = document.getElementById('character-avatar-preview');
       preview.src = '/api/tg-photo?file_id=' + encodeURIComponent(data.avatar_file_id);
       preview.style.display = 'block';
+      document.getElementById('character-avatar-placeholder').style.display = 'none';
       document.getElementById('character-avatar-hint').textContent = t('avatar_upload_replace');
       showToast(t('toast_photo_uploaded'));
     }).catch(function (e) { showToast(e.message); });

@@ -23,7 +23,7 @@ export async function onRequestGet(context) {
   if (!id) return json({ error: "Не указан персонаж." }, 400);
 
   const character = await env.DB.prepare(
-    "SELECT id, name, birthdate, description, avatar_file_id, gender FROM characters WHERE id = ?"
+    "SELECT id, owner_id, name, birthdate, description, avatar_file_id, gender FROM characters WHERE id = ?"
   ).bind(id).first();
 
   return json({ character: character || null });
