@@ -99,15 +99,46 @@
   .grid-card.create .grid-card-name { color: var(--ink-soft); font-size: 13.5px; font-family: inherit; font-weight: 700; }
 
   .search-row { display: flex; gap: 8px; margin-top: 24px; }
-  .search-row input {
-    flex: 1; background: var(--bg-soft); border: 1px solid var(--line); border-radius: 24px;
-    padding: 12px 16px; color: var(--ink); font-size: 14px;
+  .search-field { position: relative; flex: 1; }
+  .search-field-icon {
+    position: absolute; left: 15px; top: 50%; transform: translateY(-50%);
+    color: var(--ink-soft); font-size: 14px; pointer-events: none;
   }
-  .search-row input:focus { outline: none; border-color: var(--amber); }
+  .search-field input {
+    width: 100%; background: var(--bg-soft); border: 1px solid var(--line); border-radius: 24px;
+    padding: 12px 16px 12px 38px; color: var(--ink); font-size: 14px;
+  }
+  .search-field input:focus { outline: none; border-color: var(--amber); }
   .search-add-btn {
     width: 46px; height: 46px; border-radius: 50%; flex-shrink: 0;
     background: var(--btn-bottom); color: #221a12; border: none; font-size: 20px;
   }
+
+  /* ---- единый паттерн строки: локации, SMS, труппа ---- */
+  .entry-row {
+    position: relative;
+    display: flex; align-items: center; gap: 12px;
+    background: linear-gradient(180deg, var(--panel), var(--bg-soft));
+    border: 1px solid var(--line); border-radius: 14px;
+    padding: 12px 14px; margin-bottom: 10px; cursor: pointer;
+  }
+  .entry-avatar-letter {
+    width: 44px; height: 44px; border-radius: 50%; flex-shrink: 0;
+    background: var(--bg-soft); border: 1px solid var(--line);
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Cormorant Garamond', serif; font-size: 18px; color: var(--amber-soft);
+  }
+  .entry-info { flex: 1; min-width: 0; }
+  .entry-name {
+    font-family: 'Cormorant Garamond', serif; font-size: 18px; color: var(--ink);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .entry-sub {
+    font-size: 12px; color: var(--ink-soft); margin-top: 2px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .entry-arrow { color: var(--amber); font-size: 18px; flex-shrink: 0; }
+  .entry-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--wine); flex-shrink: 0; margin-right: -2px; }
 
   /* ---- список пользователей на стартовом экране ---- */
   .users-row { display: flex; gap: 16px; overflow-x: auto; padding: 2px 2px 4px; margin-bottom: 4px; justify-content: flex-start; }
@@ -505,6 +536,17 @@
   }
   .theme-toggle input:checked ~ .theme-toggle-track .theme-toggle-thumb { transform: translateX(21px); }
 
+  .lang-pill {
+    display: flex; background: var(--bg-soft); border: 1px solid var(--line);
+    border-radius: 18px; padding: 3px; flex-shrink: 0;
+  }
+  .lang-pill button {
+    border: none; background: transparent; color: var(--ink-soft);
+    font-size: 12px; font-weight: 700; font-family: inherit; cursor: pointer;
+    padding: 6px 13px; border-radius: 14px; transition: background 0.15s, color 0.15s;
+  }
+  .lang-pill button.active { background: var(--btn-bottom); color: #221a12; }
+
   .settings-block { margin-top: 28px; display: flex; flex-direction: column; gap: 16px; }
   .settings-item { display: flex; align-items: center; gap: 12px; }
   .settings-icon {
@@ -619,7 +661,10 @@
   </div>
 
   <div class="search-row">
-    <input id="home-search" data-i18n-ph="search_placeholder" placeholder="найти локацию или персонажа" oninput="filterHomeCards()" />
+    <div class="search-field">
+      <span class="search-field-icon">&#128269;</span>
+      <input id="home-search" data-i18n-ph="search_placeholder" placeholder="найти локацию или персонажа" oninput="filterHomeCards()" />
+    </div>
     <button class="search-add-btn" onclick="showScreen('create')">+</button>
   </div>
 
@@ -630,10 +675,10 @@
         <div class="settings-label" data-i18n="lang_label">Язык интерфейса</div>
         <div class="settings-hint" data-i18n="lang_hint">Переключает весь интерфейс. Имена персонажей и сообщения остаются как есть.</div>
       </div>
-      <label class="theme-toggle">
-        <input type="checkbox" id="lang-toggle-input" onchange="toggleLang()" />
-        <span class="theme-toggle-track"><span class="theme-toggle-thumb"></span></span>
-      </label>
+      <div class="lang-pill">
+        <button type="button" id="lang-btn-ru" onclick="setLang('ru')">РУ</button>
+        <button type="button" id="lang-btn-en" onclick="setLang('en')">EN</button>
+      </div>
     </div>
     <div class="settings-item">
       <div class="settings-icon">&#9789;</div>
@@ -882,8 +927,12 @@ function updateThemeLangCaptions() {
     var isLight = document.documentElement.getAttribute('data-theme') === 'light';
     caption.textContent = t(isLight ? 'theme_now_light' : 'theme_now_dark');
   }
-  var langInput = document.getElementById('lang-toggle-input');
-  if (langInput) langInput.checked = uiLang === 'en';
+  var btnRu = document.getElementById('lang-btn-ru');
+  var btnEn = document.getElementById('lang-btn-en');
+  if (btnRu && btnEn) {
+    btnRu.classList.toggle('active', uiLang === 'ru');
+    btnEn.classList.toggle('active', uiLang === 'en');
+  }
 }
 function toggleTheme() {
   var theme = document.getElementById('theme-toggle-input').checked ? 'light' : 'dark';
@@ -928,6 +977,7 @@ var I18N = {
     create_card_title: 'Создать локацию',
     create_card_sub: 'новая история',
     search_placeholder: 'найти локацию или персонажа',
+    room_quiet: 'Пока тихо.',
     lang_label: 'Язык интерфейса',
     lang_hint: 'Переключает весь интерфейс. Имена персонажей и сообщения остаются как есть.',
     theme_label: 'Тёмная тема',
@@ -1063,6 +1113,7 @@ var I18N = {
     create_card_title: 'Create location',
     create_card_sub: 'new story',
     search_placeholder: 'search locations or characters',
+    room_quiet: "It's quiet here.",
     lang_label: 'Interface language',
     lang_hint: 'Switches the whole interface. Character names and messages stay as written.',
     theme_label: 'Dark theme',
@@ -1190,9 +1241,6 @@ function setLang(lang) {
   try { localStorage.setItem('lang', uiLang); } catch (e) {}
   applyStaticTranslations();
   refreshDynamicTranslations();
-}
-function toggleLang() {
-  setLang(document.getElementById('lang-toggle-input').checked ? 'en' : 'ru');
 }
 function refreshDynamicTranslations() {
   if (typeof renderCategories === 'function' && allClubs) renderCategories();
@@ -1494,8 +1542,16 @@ function openCategory(cat) {
   allClubs.filter(function (c) { return ((c.category || t('uncategorized')).trim() || t('uncategorized')) === cat; })
     .forEach(function (c) {
       var card = document.createElement('div');
-      card.className = 'club-card';
-      card.innerHTML = '<span class="name">' + escapeHtml(c.name) + (c.unread ? ' <span class="unread-dot"></span>' : '') + '</span><span class="arrow">&rarr;</span>';
+      card.className = 'entry-row';
+      var sub = c.last_message_text
+        ? (c.last_message_character ? escapeHtml(c.last_message_character) + ': ' : '') + escapeHtml(c.last_message_text)
+        : t('room_quiet');
+      card.innerHTML =
+        '<div class="entry-avatar-letter">' + escapeHtml((c.name || '?').charAt(0).toUpperCase()) + '</div>' +
+        '<div class="entry-info"><div class="entry-name">' + escapeHtml(c.name) + '</div>' +
+        '<div class="entry-sub">' + sub + '</div></div>' +
+        (c.unread ? '<span class="entry-dot"></span>' : '') +
+        '<span class="entry-arrow">&rarr;</span>';
       card.onclick = function () { enterLocation(c, 'category'); };
       list.appendChild(card);
     });
@@ -1588,9 +1644,11 @@ function openCharactersScreen() {
       empty.style.display = 'none';
       myCharacters.forEach(function (ch) {
         var card = document.createElement('div');
-        card.className = 'club-card char-card';
+        card.className = 'entry-row';
         card.innerHTML = '<img class="avatar-thumb" src="/api/tg-photo?file_id=' + encodeURIComponent(ch.avatar_file_id) + '">' +
-          '<span class="name">' + escapeHtml(ch.name) + genderBadge(ch.gender) + '</span><span class="arrow">&rarr;</span>';
+          '<div class="entry-info"><div class="entry-name">' + escapeHtml(ch.name) + genderBadge(ch.gender) + '</div>' +
+          (ch.birthdate ? '<div class="entry-sub">' + escapeHtml(formatBirthdate(ch.birthdate)) + '</div>' : '') + '</div>' +
+          '<span class="entry-arrow">&rarr;</span>';
         card.onclick = function () { openCharacterEdit(ch); };
         list.appendChild(card);
       });
@@ -1758,12 +1816,15 @@ function openSmsListScreen() {
       empty.style.display = 'none';
       data.threads.forEach(function (thread) {
         var card = document.createElement('div');
-        card.className = 'sms-thread-card';
+        card.className = 'entry-row';
+        var sub = thread.last_message_text
+          ? (thread.last_message_character ? escapeHtml(thread.last_message_character) + ': ' : '') + escapeHtml(thread.last_message_text)
+          : t('as_prefix') + escapeHtml(thread.my_character.name);
         card.innerHTML = '<img class="avatar-thumb" src="/api/tg-photo?file_id=' + encodeURIComponent(thread.other_character.avatar_file_id) + '">' +
-          '<div class="info"><div class="name">' + escapeHtml(thread.other_character.name) +
-          (thread.unread ? ' <span class="unread-dot"></span>' : '') + '</div>' +
-          '<div class="sub">' + t('as_prefix') + escapeHtml(thread.my_character.name) + '</div></div>' +
-          '<span class="arrow">&rarr;</span>';
+          '<div class="entry-info"><div class="entry-name">' + escapeHtml(thread.other_character.name) + '</div>' +
+          '<div class="entry-sub">' + sub + '</div></div>' +
+          (thread.unread ? '<span class="entry-dot"></span>' : '') +
+          '<span class="entry-arrow">&rarr;</span>';
         card.onclick = function () { openSmsChat(thread.id, thread.my_character, thread.other_character); };
         list.appendChild(card);
       });

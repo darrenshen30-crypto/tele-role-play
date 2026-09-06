@@ -23,6 +23,7 @@ export async function onRequestGet(context) {
       "cl.id AS low_id, cl.name AS low_name, cl.avatar_file_id AS low_avatar, cl.owner_id AS low_owner, " +
       "ch.id AS high_id, ch.name AS high_name, ch.avatar_file_id AS high_avatar, ch.owner_id AS high_owner, " +
       "lm.id AS last_message_id, lm.sender_user_id AS last_message_sender, lm.created_at AS last_message_at, " +
+      "lm.text AS last_message_text, lm.character_name AS last_message_character, " +
       "COALESCE(r.last_read_message_id, 0) AS last_read_message_id " +
       "FROM sms_threads t " +
       "JOIN characters cl ON cl.id = t.char_low_id " +
@@ -44,7 +45,11 @@ export async function onRequestGet(context) {
     const unread = !!row.last_message_id &&
       String(row.last_message_sender) !== String(userId) &&
       row.last_message_id > row.last_read_message_id;
-    return { id: row.id, my_character: mine, other_character: other, unread: unread };
+    return {
+      id: row.id, my_character: mine, other_character: other, unread: unread,
+      last_message_text: row.last_message_text || null,
+      last_message_character: row.last_message_character || null,
+    };
   });
 
   return json({ threads: threads });

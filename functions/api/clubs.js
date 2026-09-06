@@ -19,7 +19,8 @@ export async function onRequestGet(context) {
 
   const { results } = await env.DB.prepare(
     "SELECT c.id, c.name, c.category, c.background_file_id, c.background_updated_at, c.music_url, c.owner_id, " +
-      "lm.id AS last_message_id, lm.user_id AS last_message_user_id, " +
+      "lm.id AS last_message_id, lm.user_id AS last_message_user_id, lm.text AS last_message_text, " +
+      "lm.character_name AS last_message_character, " +
       "COALESCE(r.last_read_message_id, 0) AS last_read_message_id " +
       "FROM clubs c " +
       "LEFT JOIN (SELECT club_id, MAX(id) AS id FROM club_messages GROUP BY club_id) lmid ON lmid.club_id = c.id " +
@@ -36,6 +37,8 @@ export async function onRequestGet(context) {
       id: row.id, name: row.name, category: row.category,
       background_file_id: row.background_file_id, background_updated_at: row.background_updated_at,
       music_url: row.music_url, owner_id: row.owner_id, unread: unread,
+      last_message_text: row.last_message_text || null,
+      last_message_character: row.last_message_character || null,
     };
   });
 
