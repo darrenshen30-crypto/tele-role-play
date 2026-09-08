@@ -408,6 +408,19 @@
   .sms-msg .msg-time { font-size: var(--lp-text-time); opacity: 0.7; margin-top: 3px; text-align: right; }
   .sms-msg .tick { opacity: 0.7; }
   .sms-msg .tick.read { opacity: 1; }
+  .msg-reply-quote {
+    display: block; margin-bottom: 6px; padding: 3px 8px;
+    border-left: 2px solid currentColor; opacity: 0.75; cursor: pointer;
+  }
+  .msg-reply-quote-name { display: block; font-size: 12px; font-weight: 600; }
+  .msg-reply-quote-text {
+    display: block; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .sms-msg.flash { animation: sms-msg-flash 0.9s ease; }
+  @keyframes sms-msg-flash {
+    0% { box-shadow: 0 0 0 2px currentColor; }
+    100% { box-shadow: 0 0 0 2px transparent; }
+  }
   .sms-input-row {
     display: flex; align-items: flex-end; gap: 8px; padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
     background: var(--panel); border-top: 1px solid var(--line);
@@ -1066,6 +1079,10 @@
     <div class="txt" data-i18n="edit_message_banner">Редактирование сообщения</div>
     <button class="secondary" onclick="cancelSmsEdit()" data-i18n="cancel">Отмена</button>
   </div>
+  <div id="sms-reply-banner" class="playback-banner">
+    <div class="txt"><span data-i18n="reply_to_prefix">Ответ на:</span> <span id="sms-reply-preview-text"></span></div>
+    <button class="secondary" onclick="cancelSmsReply()" data-i18n="cancel">Отмена</button>
+  </div>
   <div class="sms-input-row">
     <textarea id="sms-msg-input" rows="1" data-i18n-ph="message_placeholder" placeholder="Сообщение..." maxlength="4000"></textarea>
     <button class="send-btn" onclick="sendSmsMessage()">&#10148;</button>
@@ -1288,6 +1305,7 @@ var I18N = {
     default_interlocutor: 'Собеседник',
     default_subtitle_prefix: 'от лица...',
     as_prefix: 'от лица ',
+    reply_to_prefix: 'Ответ на:',
 
     default_location_title: 'Локация',
     change_character_title: 'Сменить персонажа',
@@ -1443,6 +1461,7 @@ var I18N = {
     default_interlocutor: 'Contact',
     default_subtitle_prefix: 'as...',
     as_prefix: 'as ',
+    reply_to_prefix: 'Reply to:',
 
     default_location_title: 'Location',
     change_character_title: 'Switch character',
@@ -1568,6 +1587,7 @@ var smsLastEditCheck = '';
 var smsOtherReadId = 0;
 var smsEditingMessageId = null;
 var smsForceScrollToBottom = false;
+var smsReplyToId = null;
 
 var myProfile = null;
 var registerAvatarFileId = null;
@@ -2256,6 +2276,7 @@ function openSmsChat(threadId, myCharacter, otherCharacter) {
   smsLastEditCheck = '';
   smsOtherReadId = 0;
   cancelSmsEdit();
+  cancelSmsReply();
   document.getElementById('sms-messages').innerHTML = '';
   document.getElementById('sms-chat-title').textContent = otherCharacter.name;
   document.getElementById('sms-chat-subtitle').textContent = t('as_prefix') + myCharacter.name;
@@ -2268,8 +2289,17 @@ function openSmsChat(threadId, myCharacter, otherCharacter) {
 function leaveSmsChat() {
   if (smsPollTimer) { clearInterval(smsPollTimer); smsPollTimer = null; }
   cancelSmsEdit();
+  cancelSmsReply();
   currentSmsThread = null;
   openSmsListScreen();
+}
+
+function scrollToSmsMessage(id) {
+  var el = document.querySelector('#sms-messages [data-id="' + id + '"]');
+  if (!el) return;
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  el.classList.add('flash');
+  setTimeout(function () { el.classList.remove('flash'); }, 900);
 }
 
 function smsTickHtml(messageId) {
@@ -2285,12 +2315,18 @@ function renderSmsMessage(m) {
   var time = parseDbTime(m.created_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
   var editedTag = m.edited_at ? ' <span class="edited-tag">' + t('edited_tag') + '</span>' : '';
   var tick = mine ? ' ' + smsTickHtml(m.id) : '';
-  div.innerHTML = '<div>' + formatMessageText(m.text) + '</div>' +
-    '<div class="msg-time">' + time + editedTag + tick + '</div>';
-  if (mine) {
-    div.style.cursor = 'pointer';
-    div.onclick = function () { startSmsEditMessage(m); };
+  var replyHtml = '';
+  if (m.reply) {
+    var replyText = m.reply.text || '';
+    if (replyText.length > 80) replyText = replyText.slice(0, 80) + '…';
+    replyHtml = '<div class="msg-reply-quote" onclick="event.stopPropagation(); scrollToSmsMessage(' + m.reply.id + ')">' +
+      '<span class="msg-reply-quote-name">' + escapeHtml(m.reply.character_name || '') + '</span>' +
+      '<span class="msg-reply-quote-text">' + escapeHtml(replyText) + '</span></div>';
   }
+  div.innerHTML = replyHtml + '<div>' + formatMessageText(m.text) + '</div>' +
+    '<div class="msg-time">' + time + editedTag + tick + '</div>';
+  div.style.cursor = 'pointer';
+  div.onclick = function () { if (mine) startSmsEditMessage(m); else startSmsReply(m); };
   return div;
 }
 
@@ -2335,6 +2371,7 @@ function pollSmsMessages() {
 }
 
 function startSmsEditMessage(m) {
+  cancelSmsReply();
   smsEditingMessageId = m.id;
   var input = document.getElementById('sms-msg-input');
   input.value = m.text;
@@ -2349,6 +2386,20 @@ function cancelSmsEdit() {
   input.value = '';
   autoGrowTextarea(input);
   document.getElementById('sms-edit-banner').classList.remove('show');
+}
+
+function startSmsReply(m) {
+  cancelSmsEdit();
+  smsReplyToId = m.id;
+  var preview = m.text.length > 80 ? m.text.slice(0, 80) + '…' : m.text;
+  document.getElementById('sms-reply-preview-text').textContent = (m.character_name ? m.character_name + ': ' : '') + preview;
+  document.getElementById('sms-reply-banner').classList.add('show');
+  document.getElementById('sms-msg-input').focus();
+}
+
+function cancelSmsReply() {
+  smsReplyToId = null;
+  document.getElementById('sms-reply-banner').classList.remove('show');
 }
 
 function sendSmsMessage() {
@@ -2368,11 +2419,13 @@ function sendSmsMessage() {
     return;
   }
 
+  var replyToId = smsReplyToId;
   input.value = '';
   autoGrowTextarea(input);
   input.focus();
+  cancelSmsReply();
   api('/api/sms-messages?thread_id=' + currentSmsThread.id, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: text })
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: text, reply_to_id: replyToId })
   }).then(function () { smsForceScrollToBottom = true; pollSmsMessages(); }).catch(function (e) { showToast(e.message); });
 }
 document.getElementById('sms-msg-input').addEventListener('input', function () { autoGrowTextarea(this); });

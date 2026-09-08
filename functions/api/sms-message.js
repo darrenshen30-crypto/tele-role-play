@@ -35,7 +35,7 @@ export async function onRequestPatch(context) {
   try {
     updated = await env.DB.prepare(
       "UPDATE sms_messages SET text = ?, edited_at = ? WHERE id = ? " +
-        "RETURNING id, sender_user_id, character_name, character_avatar_file_id, text, created_at, edited_at"
+        "RETURNING id, sender_user_id, character_name, character_avatar_file_id, text, created_at, edited_at, reply_to_id"
     ).bind(text, editedAt, id).first();
   } catch (e) {
     console.log("Ошибка редактирования SMS:", e.message);

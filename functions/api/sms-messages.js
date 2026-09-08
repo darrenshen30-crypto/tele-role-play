@@ -80,15 +80,29 @@ export async function onRequestGet(context) {
   if (!access) return json({ error: "Нет доступа к этой переписке." }, 403);
 
   const { results } = await env.DB.prepare(
-    "SELECT id, sender_user_id, character_name, character_avatar_file_id, text, created_at, edited_at FROM sms_messages " +
-      "WHERE thread_id = ? AND (id > ? OR (edited_at IS NOT NULL AND edited_at > ?)) ORDER BY id ASC LIMIT 200"
+    "SELECT cm.id, cm.sender_user_id, cm.character_name, cm.character_avatar_file_id, cm.text, cm.created_at, cm.edited_at, cm.reply_to_id, " +
+      "rm.text AS reply_text, rm.character_name AS reply_character_name " +
+      "FROM sms_messages cm LEFT JOIN sms_messages rm ON rm.id = cm.reply_to_id " +
+      "WHERE cm.thread_id = ? AND (cm.id > ? OR (cm.edited_at IS NOT NULL AND cm.edited_at > ?)) ORDER BY cm.id ASC LIMIT 200"
   ).bind(threadId, afterId, afterEdit).all();
+
+  const messages = (results || []).map(function (row) {
+    const message = {
+      id: row.id, sender_user_id: row.sender_user_id, character_name: row.character_name,
+      character_avatar_file_id: row.character_avatar_file_id, text: row.text,
+      created_at: row.created_at, edited_at: row.edited_at,
+    };
+    if (row.reply_to_id) {
+      message.reply = { id: row.reply_to_id, text: row.reply_text, character_name: row.reply_character_name };
+    }
+    return message;
+  });
 
   const otherRead = await env.DB.prepare(
     "SELECT MIN(last_read_message_id) AS v FROM sms_reads WHERE thread_id = ? AND user_id != ?"
   ).bind(threadId, String(userId)).first();
 
-  return json({ messages: results || [], other_read_id: (otherRead && otherRead.v != null) ? otherRead.v : 0 });
+  return json({ messages: messages, other_read_id: (otherRead && otherRead.v != null) ? otherRead.v : 0 });
 }
 
 export async function onRequestPost(context) {
@@ -107,17 +121,26 @@ export async function onRequestPost(context) {
   if (!text) return json({ error: "Пустое сообщение." }, 400);
   if (text.length > 4000) return json({ error: "Слишком длинное сообщение." }, 400);
 
+  let replyTo = null;
+  if (body.reply_to_id) {
+    replyTo = await env.DB.prepare(
+      "SELECT id, text, character_name FROM sms_messages WHERE id = ? AND thread_id = ?"
+    ).bind(Number(body.reply_to_id), threadId).first();
+    if (!replyTo) return json({ error: "Сообщение для ответа не найдено." }, 400);
+  }
+
   let message = null;
   try {
     message = await env.DB.prepare(
-      "INSERT INTO sms_messages (thread_id, sender_user_id, character_id, character_name, character_avatar_file_id, text) " +
-        "VALUES (?, ?, ?, ?, ?, ?) " +
-        "RETURNING id, sender_user_id, character_name, character_avatar_file_id, text, created_at, edited_at"
-    ).bind(threadId, String(userId), access.mine.id, access.mine.name, access.mine.avatar_file_id, text).first();
+      "INSERT INTO sms_messages (thread_id, sender_user_id, character_id, character_name, character_avatar_file_id, text, reply_to_id) " +
+        "VALUES (?, ?, ?, ?, ?, ?, ?) " +
+        "RETURNING id, sender_user_id, character_name, character_avatar_file_id, text, created_at, edited_at, reply_to_id"
+    ).bind(threadId, String(userId), access.mine.id, access.mine.name, access.mine.avatar_file_id, text, replyTo ? replyTo.id : null).first();
   } catch (e) {
     console.log("Ошибка отправки SMS:", e.message);
     return json({ error: "Не удалось отправить сообщение." }, 500);
   }
+  if (replyTo) message.reply = { id: replyTo.id, text: replyTo.text, character_name: replyTo.character_name };
 
   context.waitUntil(notifyRecipient(env, threadId, access.other.owner_id, message.id));
 
