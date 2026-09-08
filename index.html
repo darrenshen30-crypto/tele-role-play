@@ -409,12 +409,13 @@
   .sms-msg .tick { opacity: 0.7; }
   .sms-msg .tick.read { opacity: 1; }
   .sms-input-row {
-    display: flex; gap: 8px; padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+    display: flex; align-items: flex-end; gap: 8px; padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
     background: var(--panel); border-top: 1px solid var(--line);
   }
-  .sms-input-row input {
+  .sms-input-row textarea {
     flex: 1; background: var(--lp-input); border: 1px solid var(--lp-line2);
     border-radius: var(--lp-radius-pill); padding: 11px 16px; color: var(--ink); font-size: 14.5px;
+    font-family: inherit; line-height: 1.35; resize: none; overflow-y: auto; max-height: 120px;
   }
   .tick { margin-left: 4px; opacity: 0.7; }
   .tick.read { opacity: 1; color: var(--ink); }
@@ -597,12 +598,12 @@
 
   .chat-input-row {
     position: relative; z-index: 2;
-    display: flex; gap: 8px;
+    display: flex; align-items: flex-end; gap: 8px;
     padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
     background: var(--lp-scrim-2);
     border-top: 1px solid var(--lp-line);
   }
-  .chat-input-row input {
+  .chat-input-row textarea {
     flex: 1;
     background: var(--lp-input);
     border: 1px solid var(--lp-line2);
@@ -610,6 +611,7 @@
     padding: 11px 16px;
     color: var(--ink);
     font-size: 14.5px;
+    font-family: inherit; line-height: 1.35; resize: none; overflow-y: auto; max-height: 120px;
   }
   .send-btn {
     background: var(--lp-solid);
@@ -989,7 +991,7 @@
     <button class="secondary" onclick="cancelSmsEdit()" data-i18n="cancel">Отмена</button>
   </div>
   <div class="sms-input-row">
-    <input id="sms-msg-input" data-i18n-ph="message_placeholder" placeholder="Сообщение..." maxlength="4000" />
+    <textarea id="sms-msg-input" rows="1" data-i18n-ph="message_placeholder" placeholder="Сообщение..." maxlength="4000"></textarea>
     <button class="send-btn" onclick="sendSmsMessage()">&#10148;</button>
   </div>
 </div>
@@ -1031,7 +1033,7 @@
         &#128206;
         <input type="file" id="msg-photo-input" accept="image/*" style="display:none;" onchange="onMessagePhotoPicked(this.files[0])" />
       </label>
-      <input id="msg-input" data-i18n-ph="message_placeholder" placeholder="Сообщение..." maxlength="4000" />
+      <textarea id="msg-input" rows="1" data-i18n-ph="message_placeholder" placeholder="Сообщение..." maxlength="4000"></textarea>
       <button class="send-btn" onclick="sendMessage()">&#10148;</button>
     </div>
   </div>
@@ -1520,6 +1522,11 @@ function showToast(text) {
   el.textContent = text;
   el.classList.add('show');
   setTimeout(function () { el.classList.remove('show'); }, 2600);
+}
+
+function autoGrowTextarea(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
 }
 
 // D1/SQLite отдаёт created_at/edited_at как "YYYY-MM-DD HH:MM:SS" по UTC, но без
@@ -2146,13 +2153,16 @@ function startSmsEditMessage(m) {
   smsEditingMessageId = m.id;
   var input = document.getElementById('sms-msg-input');
   input.value = m.text;
+  autoGrowTextarea(input);
   input.focus();
   document.getElementById('sms-edit-banner').classList.add('show');
 }
 
 function cancelSmsEdit() {
   smsEditingMessageId = null;
-  document.getElementById('sms-msg-input').value = '';
+  var input = document.getElementById('sms-msg-input');
+  input.value = '';
+  autoGrowTextarea(input);
   document.getElementById('sms-edit-banner').classList.remove('show');
 }
 
@@ -2164,6 +2174,7 @@ function sendSmsMessage() {
   if (smsEditingMessageId) {
     var id = smsEditingMessageId;
     input.value = '';
+    autoGrowTextarea(input);
     cancelSmsEdit();
     input.focus();
     api('/api/sms-message?id=' + id, {
@@ -2173,13 +2184,15 @@ function sendSmsMessage() {
   }
 
   input.value = '';
+  autoGrowTextarea(input);
   input.focus();
   api('/api/sms-messages?thread_id=' + currentSmsThread.id, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: text })
   }).then(function () { smsForceScrollToBottom = true; pollSmsMessages(); }).catch(function (e) { showToast(e.message); });
 }
+document.getElementById('sms-msg-input').addEventListener('input', function () { autoGrowTextarea(this); });
 document.getElementById('sms-msg-input').addEventListener('keydown', function (e) {
-  if (e.key === 'Enter') sendSmsMessage();
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendSmsMessage(); }
 });
 document.getElementById('sms-messages').addEventListener('click', function (e) {
   if (e.target === this) document.getElementById('sms-msg-input').blur();
@@ -2371,13 +2384,16 @@ function startEditMessage(m) {
   removeAttachedPhoto();
   var input = document.getElementById('msg-input');
   input.value = m.text;
+  autoGrowTextarea(input);
   input.focus();
   document.getElementById('edit-banner').classList.add('show');
 }
 
 function cancelEdit() {
   editingMessageId = null;
-  document.getElementById('msg-input').value = '';
+  var input = document.getElementById('msg-input');
+  input.value = '';
+  autoGrowTextarea(input);
   document.getElementById('edit-banner').classList.remove('show');
 }
 
@@ -2418,6 +2434,7 @@ function sendMessage() {
     if (!text || !currentClub) return;
     var id = editingMessageId;
     input.value = '';
+    autoGrowTextarea(input);
     cancelEdit();
     input.focus();
     api('/api/message?id=' + id, {
@@ -2431,6 +2448,7 @@ function sendMessage() {
   var photoFileId = pendingPhotoFileId;
   var photoBlurred = document.getElementById('photo-attach-blur-check').checked;
   input.value = '';
+  autoGrowTextarea(input);
   input.focus();
   removeAttachedPhoto();
   api('/api/messages?club_id=' + currentClub.id, {
@@ -2438,8 +2456,9 @@ function sendMessage() {
     body: JSON.stringify({ text: text, character_id: activeCharacter.id, photo_file_id: photoFileId, photo_blurred: photoBlurred })
   }).then(function () { forceScrollToBottom = true; pollMessages(); }).catch(function (e) { showToast(e.message); });
 }
+document.getElementById('msg-input').addEventListener('input', function () { autoGrowTextarea(this); });
 document.getElementById('msg-input').addEventListener('keydown', function (e) {
-  if (e.key === 'Enter') sendMessage();
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
 });
 document.getElementById('messages').addEventListener('click', function (e) {
   if (e.target === this) document.getElementById('msg-input').blur();
