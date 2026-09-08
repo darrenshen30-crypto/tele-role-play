@@ -798,6 +798,12 @@
       <span class="grid-card-name" data-i18n="btn_sms">SMS</span>
       <span class="grid-card-count" id="sms-count-text"></span>
     </div>
+    <div class="grid-card" onclick="openDmListScreen()">
+      <span class="grid-card-dot" id="dm-unread-dot" style="display:none;"></span>
+      <span class="grid-card-icon">&#128172;</span>
+      <span class="grid-card-name" data-i18n="btn_dm">Приват</span>
+      <span class="grid-card-count" id="dm-count-text"></span>
+    </div>
     <div class="grid-card" onclick="openCharactersScreen()">
       <span class="grid-card-icon">&#128100;</span>
       <span class="grid-card-name" data-i18n="btn_my_characters">Мои персонажи</span>
@@ -819,6 +825,14 @@
   </div>
 
   <div class="settings-block">
+    <div class="settings-item" onclick="openRegisterScreen(false)" style="cursor:pointer;">
+      <div class="settings-icon">&#128100;</div>
+      <div class="settings-text">
+        <div class="settings-label" data-i18n="profile_label">Профиль</div>
+        <div class="settings-hint" data-i18n="profile_hint">Псевдоним и аватар вместо имени и фото из Telegram - видны другим в приложении.</div>
+        <div class="settings-caption" id="profile-now-caption"></div>
+      </div>
+    </div>
     <div class="settings-item">
       <div class="settings-icon">&#127760;</div>
       <div class="settings-text">
@@ -947,6 +961,68 @@
   <div id="character-view-description" style="color:var(--ink); font-size:15px; line-height:1.5; white-space:pre-wrap;"></div>
   <div class="btn-row" id="character-view-edit-row" style="display:none;">
     <button class="ghost-btn" id="character-view-edit-btn" data-i18n="btn_edit_character">Редактировать</button>
+  </div>
+</div>
+
+<div id="screen-register" class="screen sub-screen">
+  <span class="back-link" id="register-back-link" onclick="showScreen('list')" data-i18n="back">&larr; Назад</span>
+  <div class="sub-title" data-i18n="register_title">Давайте познакомимся</div>
+  <div class="settings-hint" data-i18n="register_hint" style="margin-bottom:18px;">Псевдоним и аватар видны другим в приложении вместо имени и фото из Telegram.</div>
+
+  <label class="avatar-upload-label">
+    <img id="register-avatar-preview" class="avatar-upload-preview" style="display:none;" />
+    <div id="register-avatar-placeholder" class="avatar-upload-placeholder">
+      <span class="avatar-upload-placeholder-icon">&#128247;</span>
+      <span data-i18n="avatar_upload_placeholder">фото</span>
+    </div>
+    <div class="avatar-upload-hint" data-i18n="avatar_upload_new">Загрузить фото</div>
+    <input type="file" id="register-avatar-input" accept="image/*" onchange="onRegisterAvatarPicked(this.files[0])" />
+  </label>
+
+  <div class="field-label" data-i18n="label_pseudonym">Псевдоним</div>
+  <input id="register-name-input" class="field-input" maxlength="40" data-i18n-ph="placeholder_pseudonym" placeholder="Как вас называть?" />
+
+  <div class="btn-row">
+    <button class="primary-btn" onclick="saveProfile()" data-i18n="save">Сохранить</button>
+  </div>
+</div>
+
+<div id="screen-dm" class="screen sub-screen">
+  <span class="back-link" onclick="showScreen('list')" data-i18n="back">&larr; Назад</span>
+  <div class="sub-title" data-i18n="dm_title">Приват</div>
+  <div id="dm-threads-list"></div>
+  <div id="dm-threads-empty" class="empty-hint" style="display:none;" data-i18n="empty_dm_threads">
+    Пока нет ни одного личного сообщения.<br />Начните новое.
+  </div>
+  <div class="btn-row">
+    <button class="primary-btn" onclick="openDmNewScreen()" data-i18n="btn_write_dm">+ Написать</button>
+  </div>
+</div>
+
+<div id="screen-dm-new" class="screen sub-screen">
+  <span class="back-link" onclick="showScreen('dm')" data-i18n="back">&larr; Назад</span>
+  <div class="sub-title" data-i18n="dm_new_title">Кому написать?</div>
+  <div id="dm-pick-list"></div>
+  <div id="dm-pick-empty" class="empty-hint" style="display:none;" data-i18n="empty_dm_pick">
+    Пока больше некому писать.
+  </div>
+</div>
+
+<div id="screen-dm-chat" class="screen">
+  <div class="sms-top">
+    <button class="icon-btn" onclick="leaveDmChat()">&larr;</button>
+    <div class="sms-title-wrap">
+      <div id="dm-chat-title" class="sms-title">Собеседник</div>
+    </div>
+  </div>
+  <div id="dm-messages" class="sms-messages"></div>
+  <div id="dm-edit-banner" class="playback-banner">
+    <div class="txt" data-i18n="edit_message_banner">Редактирование сообщения</div>
+    <button class="secondary" onclick="cancelDmEdit()" data-i18n="cancel">Отмена</button>
+  </div>
+  <div class="sms-input-row">
+    <textarea id="dm-msg-input" rows="1" data-i18n-ph="message_placeholder" placeholder="Сообщение..." maxlength="4000"></textarea>
+    <button class="send-btn" onclick="sendDmMessage()">&#10148;</button>
   </div>
 </div>
 
@@ -1239,6 +1315,23 @@ var I18N = {
     playback_someone_offers: 'Кто-то предлагает включить музыку в клубе.',
     btn_ready: 'Готов',
     btn_start_without_others: 'Начать без остальных',
+
+    register_title: 'Давайте познакомимся',
+    register_hint: 'Псевдоним и аватар видны другим в приложении вместо имени и фото из Telegram.',
+    label_pseudonym: 'Псевдоним',
+    placeholder_pseudonym: 'Как вас называть?',
+    toast_enter_pseudonym: 'Введите псевдоним.',
+
+    profile_label: 'Профиль',
+    profile_hint: 'Псевдоним и аватар вместо имени и фото из Telegram - видны другим в приложении.',
+
+    btn_dm: 'Приват',
+    dm_title: 'Приват',
+    dm_new_title: 'Кому написать?',
+    btn_write_dm: '+ Написать',
+    empty_dm_threads: 'Пока нет ни одного личного сообщения.<br />Начните новое.',
+    empty_dm_pick: 'Пока больше некому писать.',
+    dm_unread_count: function (n) { return n ? (n + ' ' + ruPluralWord(n, 'непрочитанное', 'непрочитанных', 'непрочитанных')) : 'нет непрочитанных'; },
   },
   en: {
     app_title: 'Clubs',
@@ -1377,6 +1470,23 @@ var I18N = {
     playback_someone_offers: 'Someone wants to play music in the location.',
     btn_ready: 'Ready',
     btn_start_without_others: 'Start without others',
+
+    register_title: 'Let’s get acquainted',
+    register_hint: 'Your pseudonym and avatar are shown to others instead of your Telegram name and photo.',
+    label_pseudonym: 'Pseudonym',
+    placeholder_pseudonym: 'What should we call you?',
+    toast_enter_pseudonym: 'Enter a pseudonym.',
+
+    profile_label: 'Profile',
+    profile_hint: 'Pseudonym and avatar shown to others instead of your Telegram name and photo.',
+
+    btn_dm: 'Private',
+    dm_title: 'Private',
+    dm_new_title: 'Message who?',
+    btn_write_dm: '+ New message',
+    empty_dm_threads: 'No private messages yet.<br />Start a new one.',
+    empty_dm_pick: 'No one else to message yet.',
+    dm_unread_count: function (n) { return n ? (n + ' unread') : 'no unread'; },
   },
 };
 var uiLang = 'ru';
@@ -1426,6 +1536,7 @@ var screens = {
   characters: 'screen-characters', characterEdit: 'screen-character-edit', characterPick: 'screen-character-pick',
   characterView: 'screen-character-view', userCharacters: 'screen-user-characters',
   sms: 'screen-sms', smsNew: 'screen-sms-new', smsChat: 'screen-sms-chat',
+  register: 'screen-register', dm: 'screen-dm', dmNew: 'screen-dm-new', dmChat: 'screen-dm-chat',
 };
 var allClubs = [];
 var currentCategory = null;
@@ -1457,6 +1568,18 @@ var smsLastEditCheck = '';
 var smsOtherReadId = 0;
 var smsEditingMessageId = null;
 var smsForceScrollToBottom = false;
+
+var myProfile = null;
+var registerAvatarFileId = null;
+var registerMandatory = false;
+
+var currentDmThread = null;
+var dmPollTimer = null;
+var dmLastMessageId = 0;
+var dmLastEditCheck = '';
+var dmOtherReadId = 0;
+var dmEditingMessageId = null;
+var dmForceScrollToBottom = false;
 var pollTimer = null;
 var ytPlayer = null;
 var ytReady = false;
@@ -1499,20 +1622,24 @@ function pollClubsQuiet() {
 
 function updateTelegramBackButton() {
   if (!tg || !tg.BackButton) return;
-  if (currentScreenName === 'list') tg.BackButton.hide(); else tg.BackButton.show();
+  var hide = currentScreenName === 'list' || (currentScreenName === 'register' && registerMandatory);
+  if (hide) tg.BackButton.hide(); else tg.BackButton.show();
 }
 
 function handleTelegramBack() {
   switch (currentScreenName) {
-    case 'category': case 'create': case 'characters': case 'sms': showScreen('list'); break;
+    case 'category': case 'create': case 'characters': case 'sms': case 'dm': showScreen('list'); break;
     case 'characterEdit': backFromCharacterEdit(); break;
     case 'characterPick': cancelCharacterPick(); break;
     case 'characterView': leaveCharacterView(); break;
     case 'userCharacters': showScreen('list'); break;
     case 'smsNew': showScreen('sms'); break;
+    case 'dmNew': showScreen('dm'); break;
+    case 'register': if (!registerMandatory) showScreen('list'); break;
     case 'settings': showScreen('chat'); break;
     case 'chat': leaveChat(); break;
     case 'smsChat': leaveSmsChat(); break;
+    case 'dmChat': leaveDmChat(); break;
     default: showScreen('list');
   }
 }
@@ -1527,6 +1654,64 @@ function showToast(text) {
 function autoGrowTextarea(el) {
   el.style.height = 'auto';
   el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+}
+
+// ---------- профиль (псевдоним и аватар вместо имени/фото из Telegram) ----------
+
+function updateProfileCaption() {
+  var el = document.getElementById('profile-now-caption');
+  if (el) el.textContent = (myProfile && myProfile.display_name) || '';
+}
+
+function openRegisterScreen(mandatory) {
+  registerMandatory = !!mandatory;
+  document.getElementById('register-back-link').style.display = registerMandatory ? 'none' : '';
+  document.getElementById('register-name-input').value = (myProfile && myProfile.display_name) || '';
+  registerAvatarFileId = (myProfile && myProfile.avatar_file_id) || null;
+  var preview = document.getElementById('register-avatar-preview');
+  var placeholder = document.getElementById('register-avatar-placeholder');
+  if (registerAvatarFileId) {
+    preview.src = '/api/tg-photo?file_id=' + encodeURIComponent(registerAvatarFileId);
+    preview.style.display = 'block';
+    placeholder.style.display = 'none';
+  } else {
+    preview.style.display = 'none';
+    placeholder.style.display = 'flex';
+  }
+  showScreen('register');
+}
+
+function onRegisterAvatarPicked(file) {
+  if (!file) return;
+  showToast(t('toast_uploading_photo'));
+  fetch('/api/profile-photo', {
+    method: 'POST',
+    headers: { 'Content-Type': file.type || 'image/jpeg', 'X-Tg-Init-Data': (tg && tg.initData) || '' },
+    body: file
+  }).then(function (r) { return r.json().then(function (d) { if (!r.ok) throw new Error(d.error); return d; }); })
+    .then(function (data) {
+      registerAvatarFileId = data.avatar_file_id;
+      var preview = document.getElementById('register-avatar-preview');
+      preview.src = '/api/tg-photo?file_id=' + encodeURIComponent(data.avatar_file_id);
+      preview.style.display = 'block';
+      document.getElementById('register-avatar-placeholder').style.display = 'none';
+      showToast(t('toast_photo_uploaded'));
+    }).catch(function (e) { showToast(e.message); });
+}
+
+function saveProfile() {
+  var name = document.getElementById('register-name-input').value.trim();
+  if (!name) return showToast(t('toast_enter_pseudonym'));
+  api('/api/profile', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ display_name: name, avatar_file_id: registerAvatarFileId })
+  }).then(function (data) {
+    myProfile = data.profile;
+    updateProfileCaption();
+    showToast(t('toast_saved'));
+    showScreen('list');
+    loadUsersList();
+  }).catch(function (e) { showToast(e.message); });
 }
 
 // D1/SQLite отдаёт created_at/edited_at как "YYYY-MM-DD HH:MM:SS" по UTC, но без
@@ -2198,6 +2383,201 @@ document.getElementById('sms-messages').addEventListener('click', function (e) {
   if (e.target === this) document.getElementById('sms-msg-input').blur();
 });
 
+// ---------- приват (сообщения между аккаунтами напрямую, вне персонажей) ----------
+
+function openDmListScreen() {
+  api('/api/dm-threads').then(function (data) {
+    var list = document.getElementById('dm-threads-list');
+    var empty = document.getElementById('dm-threads-empty');
+    list.innerHTML = '';
+    if (!data.threads.length) { empty.style.display = 'block'; }
+    else {
+      empty.style.display = 'none';
+      data.threads.forEach(function (thread) {
+        var card = document.createElement('div');
+        card.className = 'entry-row';
+        var avatarHtml = thread.other.avatar_url
+          ? '<img class="avatar-thumb" src="' + escapeHtml(thread.other.avatar_url) + '">'
+          : '<div class="avatar-thumb user-chip-avatar-fallback">' + escapeHtml((thread.other.name || '?').charAt(0).toUpperCase()) + '</div>';
+        card.innerHTML = avatarHtml +
+          '<div class="entry-info"><div class="entry-name">' + escapeHtml(thread.other.name) + '</div>' +
+          '<div class="entry-sub">' + escapeHtml(thread.last_message_text || '') + '</div></div>' +
+          (thread.unread ? '<span class="entry-dot"></span>' : '') +
+          '<span class="entry-arrow">&rarr;</span>';
+        card.onclick = function () { openDmChat(thread.id, thread.other); };
+        list.appendChild(card);
+      });
+    }
+    showScreen('dm');
+  }).catch(function (e) { showToast(e.message); });
+}
+
+function openDmNewScreen() {
+  api('/api/users-list').then(function (data) {
+    var list = document.getElementById('dm-pick-list');
+    var empty = document.getElementById('dm-pick-empty');
+    list.innerHTML = '';
+    var myId = tg && tg.initDataUnsafe && tg.initDataUnsafe.user && tg.initDataUnsafe.user.id;
+    var others = (data.users || []).filter(function (u) { return String(u.user_id) !== String(myId); });
+    if (!others.length) { empty.style.display = 'block'; }
+    else {
+      empty.style.display = 'none';
+      others.forEach(function (u) {
+        var card = document.createElement('div');
+        card.className = 'pick-card';
+        var avatarHtml = u.photo_url
+          ? '<img class="avatar-thumb" src="' + escapeHtml(u.photo_url) + '">'
+          : '<div class="avatar-thumb user-chip-avatar-fallback">' + escapeHtml((u.name || '?').charAt(0).toUpperCase()) + '</div>';
+        card.innerHTML = avatarHtml + '<div class="info"><div class="name">' + escapeHtml(u.name) + '</div></div>';
+        card.onclick = function () { startDmThread(u.user_id); };
+        list.appendChild(card);
+      });
+    }
+    showScreen('dmNew');
+  }).catch(function (e) { showToast(e.message); });
+}
+
+function startDmThread(otherUserId) {
+  api('/api/dm-threads', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ other_user_id: otherUserId })
+  }).then(function (data) {
+    openDmChat(data.thread_id, data.other);
+  }).catch(function (e) { showToast(e.message); });
+}
+
+function openDmChat(threadId, other) {
+  currentDmThread = { id: threadId, other: other };
+  dmLastMessageId = 0;
+  dmLastEditCheck = '';
+  dmOtherReadId = 0;
+  cancelDmEdit();
+  document.getElementById('dm-messages').innerHTML = '';
+  document.getElementById('dm-chat-title').textContent = other.name;
+  showScreen('dmChat');
+  pollDmMessages();
+  if (dmPollTimer) clearInterval(dmPollTimer);
+  dmPollTimer = setInterval(function () { pollDmMessages(); }, 2500);
+}
+
+function leaveDmChat() {
+  if (dmPollTimer) { clearInterval(dmPollTimer); dmPollTimer = null; }
+  cancelDmEdit();
+  currentDmThread = null;
+  openDmListScreen();
+}
+
+function dmTickHtml(messageId) {
+  var read = messageId <= dmOtherReadId;
+  return '<span class="tick' + (read ? ' read' : '') + '">' + (read ? '✓✓' : '✓') + '</span>';
+}
+
+function renderDmMessage(m) {
+  var mine = tg && tg.initDataUnsafe && tg.initDataUnsafe.user && String(tg.initDataUnsafe.user.id) === String(m.sender_user_id);
+  var div = document.createElement('div');
+  div.className = 'sms-msg ' + (mine ? 'mine' : 'theirs');
+  div.dataset.id = m.id;
+  var time = parseDbTime(m.created_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+  var editedTag = m.edited_at ? ' <span class="edited-tag">' + t('edited_tag') + '</span>' : '';
+  var tick = mine ? ' ' + dmTickHtml(m.id) : '';
+  div.innerHTML = '<div>' + formatMessageText(m.text) + '</div>' +
+    '<div class="msg-time">' + time + editedTag + tick + '</div>';
+  if (mine) {
+    div.style.cursor = 'pointer';
+    div.onclick = function () { startDmEditMessage(m); };
+  }
+  return div;
+}
+
+function updateDmReadTicks() {
+  var nodes = document.querySelectorAll('#dm-messages .sms-msg.mine');
+  for (var i = 0; i < nodes.length; i++) {
+    var el = nodes[i];
+    var span = el.querySelector('.tick');
+    if (!span) continue;
+    var read = Number(el.dataset.id) <= dmOtherReadId;
+    span.className = 'tick' + (read ? ' read' : '');
+    span.textContent = read ? '✓✓' : '✓';
+  }
+}
+
+function pollDmMessages() {
+  if (!currentDmThread) return;
+  var isInitialLoad = dmLastMessageId === 0;
+  var forced = dmForceScrollToBottom;
+  dmForceScrollToBottom = false;
+  api('/api/dm-messages?thread_id=' + currentDmThread.id + '&after_id=' + dmLastMessageId + '&after_edit=' + encodeURIComponent(dmLastEditCheck))
+    .then(function (data) {
+      dmOtherReadId = data.other_read_id || 0;
+      if (data.messages.length) {
+        var box = document.getElementById('dm-messages');
+        var wasAtBottom = isInitialLoad || forced || (box.scrollHeight - box.scrollTop - box.clientHeight < 60);
+        data.messages.forEach(function (m) {
+          var existing = box.querySelector('[data-id="' + m.id + '"]');
+          if (existing) existing.replaceWith(renderDmMessage(m)); else box.appendChild(renderDmMessage(m));
+          dmLastMessageId = Math.max(dmLastMessageId, m.id);
+          if (m.edited_at && m.edited_at > dmLastEditCheck) dmLastEditCheck = m.edited_at;
+        });
+        if (wasAtBottom) box.scrollTop = box.scrollHeight;
+        if (isInitialLoad || forced) setTimeout(function () { box.scrollTop = box.scrollHeight; }, 150);
+        api('/api/dm-read', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ thread_id: currentDmThread.id, message_id: dmLastMessageId })
+        }).catch(function () {});
+      }
+      updateDmReadTicks();
+    }).catch(function () {});
+}
+
+function startDmEditMessage(m) {
+  dmEditingMessageId = m.id;
+  var input = document.getElementById('dm-msg-input');
+  input.value = m.text;
+  autoGrowTextarea(input);
+  input.focus();
+  document.getElementById('dm-edit-banner').classList.add('show');
+}
+
+function cancelDmEdit() {
+  dmEditingMessageId = null;
+  var input = document.getElementById('dm-msg-input');
+  input.value = '';
+  autoGrowTextarea(input);
+  document.getElementById('dm-edit-banner').classList.remove('show');
+}
+
+function sendDmMessage() {
+  var input = document.getElementById('dm-msg-input');
+  var text = input.value.trim();
+  if (!text || !currentDmThread) return;
+
+  if (dmEditingMessageId) {
+    var id = dmEditingMessageId;
+    input.value = '';
+    autoGrowTextarea(input);
+    cancelDmEdit();
+    input.focus();
+    api('/api/dm-message?id=' + id, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: text })
+    }).then(function () { dmForceScrollToBottom = true; pollDmMessages(); }).catch(function (e) { showToast(e.message); });
+    return;
+  }
+
+  input.value = '';
+  autoGrowTextarea(input);
+  input.focus();
+  api('/api/dm-messages?thread_id=' + currentDmThread.id, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: text })
+  }).then(function () { dmForceScrollToBottom = true; pollDmMessages(); }).catch(function (e) { showToast(e.message); });
+}
+document.getElementById('dm-msg-input').addEventListener('input', function () { autoGrowTextarea(this); });
+document.getElementById('dm-msg-input').addEventListener('keydown', function (e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendDmMessage(); }
+});
+document.getElementById('dm-messages').addEventListener('click', function (e) {
+  if (e.target === this) document.getElementById('dm-msg-input').blur();
+});
+
 // ---------- чат ----------
 
 var chatOrigin = 'list';
@@ -2741,6 +3121,14 @@ function loadMoreSectionCounts() {
     var countEl = document.getElementById('troupe-count-text');
     if (countEl) countEl.textContent = t('troupe_count')((data.characters || []).length);
   }).catch(function () {});
+  api('/api/dm-threads').then(function (data) {
+    var threads = data.threads || [];
+    var unread = threads.filter(function (th) { return th.unread; }).length;
+    var dot = document.getElementById('dm-unread-dot');
+    if (dot) dot.style.display = unread ? 'block' : 'none';
+    var countEl = document.getElementById('dm-count-text');
+    if (countEl) countEl.textContent = t('dm_unread_count')(unread);
+  }).catch(function () {});
 }
 function filterHomeCards() {
   var q = document.getElementById('home-search').value.trim().toLowerCase();
@@ -2751,12 +3139,24 @@ function filterHomeCards() {
 }
 
 function init() {
-  showScreen('list');
   updateGreeting();
   updateClock();
   setInterval(updateClock, 30000);
-  loadUsersList();
-  loadMoreSectionCounts();
+  api('/api/profile').then(function (data) {
+    myProfile = data.profile;
+    updateProfileCaption();
+    if (!myProfile || !myProfile.display_name) {
+      openRegisterScreen(true);
+    } else {
+      showScreen('list');
+      loadUsersList();
+      loadMoreSectionCounts();
+    }
+  }).catch(function () {
+    showScreen('list');
+    loadUsersList();
+    loadMoreSectionCounts();
+  });
   setTimeout(dismissSplash, 2600);
 }
 init();

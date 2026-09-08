@@ -2,7 +2,9 @@
 // персонаж (то есть реальных участников, а не всех, кто просто есть в
 // OWNER_ID - например, аккаунт только для просмотра туда не попадёт, пока
 // не заведёт себе персонажа). Показывается на стартовом экране со списком
-// локаций.
+// локаций. Имя и фото - псевдоним/аватар из профиля (user_presence.display_name
+// /avatar_file_id), настоящие Telegram-имя и фото - только запасной вариант,
+// пока человек не прошёл регистрацию (см. profile.js).
 
 const ONLINE_WINDOW_MS = 60000;
 
@@ -22,7 +24,7 @@ export async function onRequestGet(context) {
   if (!isOwner(env, userId)) return json({ error: "Нет доступа." }, 403);
 
   const { results } = await env.DB.prepare(
-    "SELECT ch.owner_id AS user_id, up.name, up.photo_url, up.last_seen " +
+    "SELECT ch.owner_id AS user_id, up.display_name, up.name, up.avatar_file_id, up.photo_url, up.last_seen " +
       "FROM (SELECT DISTINCT owner_id FROM characters) ch " +
       "LEFT JOIN user_presence up ON up.user_id = ch.owner_id " +
       "ORDER BY ch.owner_id"
@@ -33,8 +35,8 @@ export async function onRequestGet(context) {
     const lastSeenMs = row.last_seen ? new Date(row.last_seen).getTime() : 0;
     return {
       user_id: row.user_id,
-      name: row.name || ("Пользователь " + row.user_id),
-      photo_url: row.photo_url || null,
+      name: row.display_name || row.name || ("Пользователь " + row.user_id),
+      photo_url: row.avatar_file_id ? ("/api/tg-photo?file_id=" + encodeURIComponent(row.avatar_file_id)) : (row.photo_url || null),
       online: lastSeenMs > 0 && (now - lastSeenMs) < ONLINE_WINDOW_MS,
     };
   });
