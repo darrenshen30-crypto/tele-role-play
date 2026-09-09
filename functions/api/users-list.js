@@ -1,10 +1,9 @@
 // functions/api/users-list.js — список людей, у которых есть хотя бы один
 // персонаж (то есть реальных участников, а не всех, кто просто есть в
 // OWNER_ID - например, аккаунт только для просмотра туда не попадёт, пока
-// не заведёт себе персонажа). Показывается на стартовом экране со списком
-// локаций. Имя и фото - псевдоним/аватар из профиля (user_presence.display_name
-// /avatar_file_id), настоящие Telegram-имя и фото - только запасной вариант,
-// пока человек не прошёл регистрацию (см. profile.js).
+// не заведёт себе персонажа), кроме самого запрашивающего - себя самого в
+// этом списке видеть незачем (фильтр по server-verified userId, а не на
+// клиенте, чтобы не зависеть от tg.initDataUnsafe).
 
 const ONLINE_WINDOW_MS = 60000;
 
@@ -25,10 +24,10 @@ export async function onRequestGet(context) {
 
   const { results } = await env.DB.prepare(
     "SELECT ch.owner_id AS user_id, up.display_name, up.name, up.avatar_file_id, up.photo_url, up.last_seen " +
-      "FROM (SELECT DISTINCT owner_id FROM characters) ch " +
+      "FROM (SELECT DISTINCT owner_id FROM characters WHERE owner_id != ?) ch " +
       "LEFT JOIN user_presence up ON up.user_id = ch.owner_id " +
       "ORDER BY ch.owner_id"
-  ).all();
+  ).bind(String(userId)).all();
 
   const now = Date.now();
   const users = (results || []).map(function (row) {

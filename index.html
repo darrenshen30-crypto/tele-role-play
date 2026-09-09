@@ -824,8 +824,8 @@
 <div id="screen-list" class="screen active">
   <div class="greeting-title" id="greeting-title">Добрый вечер!</div>
   <div class="greeting-sub" id="greeting-sub" data-i18n="greeting_sub">вот что происходит в ваших историях.</div>
-  <div class="clock-row"><span id="clock-time">--:--</span>&nbsp;&middot;&nbsp;<span id="online-count-text"></span></div>
-  <div id="users-row" class="users-row"></div>
+  <div class="clock-row"><span id="clock-time">--:--</span></div>
+  <div id="home-stories-row" class="users-row" style="display:none;"></div>
 
   <div class="section-header">
     <span class="section-title" data-i18n="section_locations">ЛОКАЦИИ</span>
@@ -861,6 +861,11 @@
       <span class="grid-card-icon">&#128248;</span>
       <span class="grid-card-name" data-i18n="btn_stories">Истории</span>
       <span class="grid-card-count" id="stories-count-text"></span>
+    </div>
+    <div class="grid-card" onclick="openUsersScreen()">
+      <span class="grid-card-icon">&#128101;</span>
+      <span class="grid-card-name" data-i18n="btn_users">Участники</span>
+      <span class="grid-card-count" id="users-count-text"></span>
     </div>
     <div class="grid-card create" onclick="showScreen('create')">
       <span class="grid-card-icon">+</span>
@@ -949,6 +954,15 @@
   <div id="user-characters-list"></div>
   <div id="user-characters-empty" class="empty-hint" style="display:none;" data-i18n="empty_user_characters">
     У этого пользователя пока нет персонажей.
+  </div>
+</div>
+
+<div id="screen-users" class="screen sub-screen">
+  <span class="back-link" onclick="showScreen('list')" data-i18n="back">&larr; Назад</span>
+  <div class="sub-title" data-i18n="users_title">Участники</div>
+  <div id="users-screen-list"></div>
+  <div id="users-empty" class="empty-hint" style="display:none;" data-i18n="empty_users">
+    Пока никого нет.
   </div>
 </div>
 
@@ -1454,6 +1468,12 @@ var I18N = {
     story_just_now: 'только что',
     story_minutes_ago: function (n) { return n + ' ' + ruPluralWord(n, 'минуту', 'минуты', 'минут') + ' назад'; },
     story_hours_ago: function (n) { return n + ' ' + ruPluralWord(n, 'час', 'часа', 'часов') + ' назад'; },
+
+    btn_users: 'Участники',
+    users_title: 'Участники',
+    empty_users: 'Пока никого нет.',
+    user_online: 'В сети',
+    user_offline: 'Не в сети',
   },
   en: {
     app_title: 'Clubs',
@@ -1624,6 +1644,12 @@ var I18N = {
     story_just_now: 'just now',
     story_minutes_ago: function (n) { return n + (n === 1 ? ' minute' : ' minutes') + ' ago'; },
     story_hours_ago: function (n) { return n + (n === 1 ? ' hour' : ' hours') + ' ago'; },
+
+    btn_users: 'Participants',
+    users_title: 'Participants',
+    empty_users: 'No one yet.',
+    user_online: 'Online',
+    user_offline: 'Offline',
   },
 };
 var uiLang = 'ru';
@@ -1652,7 +1678,7 @@ function setLang(lang) {
 }
 function refreshDynamicTranslations() {
   if (typeof renderCategories === 'function' && allClubs) renderCategories();
-  if (typeof loadUsersList === 'function') loadUsersList();
+  if (typeof refreshStories === 'function') refreshStories().catch(function () {});
   if (typeof loadMoreSectionCounts === 'function') loadMoreSectionCounts();
   if (typeof updateGreeting === 'function') updateGreeting();
 }
@@ -1675,6 +1701,7 @@ var screens = {
   sms: 'screen-sms', smsNew: 'screen-sms-new', smsChat: 'screen-sms-chat',
   register: 'screen-register', dm: 'screen-dm', dmNew: 'screen-dm-new', dmChat: 'screen-dm-chat',
   stories: 'screen-stories', storyNew: 'screen-story-new', storyView: 'screen-story-view',
+  users: 'screen-users',
 };
 var allClubs = [];
 var currentCategory = null;
@@ -1726,8 +1753,9 @@ var musicOn = false;
 var clubsPollTimer = null;
 
 var storyGroups = [];
-var currentStoryGroup = null;
-var currentStoryIndex = 0;
+var storyGroupIndex = 0;
+var storyItemIndex = 0;
+var storyViewReturnTo = 'list';
 var storyAdvanceTimer = null;
 var storySelectedCharacterId = null;
 var storyPhotoFileId = null;
@@ -1775,7 +1803,7 @@ function updateTelegramBackButton() {
 
 function handleTelegramBack() {
   switch (currentScreenName) {
-    case 'category': case 'create': case 'characters': case 'sms': case 'dm': case 'stories': showScreen('list'); break;
+    case 'category': case 'create': case 'characters': case 'sms': case 'dm': case 'stories': case 'users': showScreen('list'); break;
     case 'characterEdit': backFromCharacterEdit(); break;
     case 'characterPick': cancelCharacterPick(); break;
     case 'characterView': leaveCharacterView(); break;
@@ -1859,7 +1887,7 @@ function saveProfile() {
     updateProfileCaption();
     showToast(t('toast_saved'));
     showScreen('list');
-    loadUsersList();
+    refreshStories().catch(function () {});
   }).catch(function (e) { showToast(e.message); });
 }
 
@@ -1923,33 +1951,33 @@ function api(path, options) {
 
 // ---------- список пользователей ----------
 
-function loadUsersList() {
+function openUsersScreen() {
   api('/api/users-list').then(function (data) {
-    renderUsersList(data.users || []);
-  }).catch(function () {});
+    renderUsersScreenList(data.users || []);
+    showScreen('users');
+  }).catch(function (e) { showToast(e.message); });
 }
 
-function renderUsersList(users) {
-  var row = document.getElementById('users-row');
-  row.innerHTML = '';
-  var myId = tg && tg.initDataUnsafe && tg.initDataUnsafe.user && tg.initDataUnsafe.user.id;
-  var others = users.filter(function (u) { return String(u.user_id) !== String(myId); });
-  var onlineCount = others.filter(function (u) { return u.online; }).length;
-  var onlineEl = document.getElementById('online-count-text');
-  if (onlineEl) onlineEl.textContent = t('online_count')(onlineCount);
-  others.forEach(function (u) {
-    var chip = document.createElement('div');
-    chip.className = 'user-chip';
-    var avatarHtml = u.photo_url
-      ? '<img class="user-chip-avatar" src="' + escapeHtml(u.photo_url) + '" />'
-      : '<div class="user-chip-avatar user-chip-avatar-fallback">' + escapeHtml((u.name || '?').charAt(0).toUpperCase()) + '</div>';
-    chip.innerHTML =
-      '<div class="user-chip-avatar-wrap">' + avatarHtml +
-      '<span class="user-chip-status' + (u.online ? ' online' : '') + '"></span></div>' +
-      '<div class="user-chip-name">' + escapeHtml(u.name) + '</div>';
-    chip.onclick = function () { openUserCharacters(u.user_id, u.name); };
-    row.appendChild(chip);
-  });
+function renderUsersScreenList(users) {
+  var list = document.getElementById('users-screen-list');
+  var empty = document.getElementById('users-empty');
+  list.innerHTML = '';
+  if (!users.length) { empty.style.display = 'block'; }
+  else {
+    empty.style.display = 'none';
+    users.forEach(function (u) {
+      var row = document.createElement('div');
+      row.className = 'entry-row';
+      var avatarHtml = u.photo_url
+        ? '<img class="avatar-thumb" src="' + escapeHtml(u.photo_url) + '">'
+        : '<div class="avatar-thumb user-chip-avatar-fallback">' + escapeHtml((u.name || '?').charAt(0).toUpperCase()) + '</div>';
+      row.innerHTML = avatarHtml + '<div class="entry-info"><div class="entry-name">' + escapeHtml(u.name) + '</div>' +
+        '<div class="entry-sub">' + (u.online ? t('user_online') : t('user_offline')) + '</div></div>' +
+        '<span class="entry-arrow">&rarr;</span>';
+      row.onclick = function () { openUserCharacters(u.user_id, u.name); };
+      list.appendChild(row);
+    });
+  }
 }
 
 function openUserCharacters(userId, name) {
@@ -2327,15 +2355,18 @@ function backFromCharacterEdit() {
 
 // ---------- истории: фото от лица персонажа, живут 24 часа ----------
 
+// Строка историй показывается в двух местах - на главном экране (вместо
+// списка пользователей) и на отдельном экране "Истории"; обе всегда рисуют
+// один и тот же storyGroups, поэтому индекс персонажа одинаково валиден для
+// обеих и клик из любой из них открывает один и тот же openStoryView.
 function openStoriesScreen() {
-  api('/api/stories').then(function (data) {
-    renderStoriesRow(data.stories || []);
-    showScreen('stories');
-  }).catch(function (e) { showToast(e.message); });
+  refreshStories().then(function () { showScreen('stories'); })
+    .catch(function (e) { showToast(e.message); });
 }
 
 // Группируем плоский список по персонажу-автору - в ленте одна карточка на
-// персонажа (как в Instagram/Telegram), а не одна на каждое фото.
+// персонажа (как в Instagram/Telegram), а не одна на каждое фото; несколько
+// историй одного персонажа образуют его "стопку" для просмотра по порядку.
 function groupStoriesByCharacter(list) {
   var byChar = {};
   var order = [];
@@ -2346,28 +2377,34 @@ function groupStoriesByCharacter(list) {
   return order.map(function (id) { return byChar[id]; });
 }
 
-function renderStoriesRow(list) {
-  storyGroups = groupStoriesByCharacter(list);
-  var row = document.getElementById('stories-row');
-  var empty = document.getElementById('stories-empty');
+function refreshStories() {
+  return api('/api/stories').then(function (data) {
+    storyGroups = groupStoriesByCharacter(data.stories || []);
+    renderStoriesRowInto('home-stories-row', true);
+    renderStoriesRowInto('stories-row', false);
+    var empty = document.getElementById('stories-empty');
+    if (empty) empty.style.display = storyGroups.length ? 'none' : 'block';
+    return storyGroups;
+  });
+}
+
+function renderStoriesRowInto(containerId, isHome) {
+  var row = document.getElementById(containerId);
+  if (!row) return;
   row.innerHTML = '';
-  if (!storyGroups.length) {
-    empty.style.display = 'block';
-  } else {
-    empty.style.display = 'none';
-    storyGroups.forEach(function (items) {
-      var head = items[items.length - 1];
-      var chip = document.createElement('div');
-      chip.className = 'user-chip';
-      var avatarHtml = head.character_avatar_file_id
-        ? '<img class="user-chip-avatar story-ring" src="/api/tg-photo?file_id=' + encodeURIComponent(head.character_avatar_file_id) + '" />'
-        : '<div class="user-chip-avatar story-ring user-chip-avatar-fallback">' + escapeHtml((head.character_name || '?').charAt(0).toUpperCase()) + '</div>';
-      chip.innerHTML = '<div class="user-chip-avatar-wrap">' + avatarHtml + '</div>' +
-        '<div class="user-chip-name">' + escapeHtml(head.character_name) + '</div>';
-      chip.onclick = function () { openStoryView(items); };
-      row.appendChild(chip);
-    });
-  }
+  storyGroups.forEach(function (items, groupIndex) {
+    var head = items[items.length - 1];
+    var chip = document.createElement('div');
+    chip.className = 'user-chip';
+    var avatarHtml = head.character_avatar_file_id
+      ? '<img class="user-chip-avatar story-ring" src="/api/tg-photo?file_id=' + encodeURIComponent(head.character_avatar_file_id) + '" />'
+      : '<div class="user-chip-avatar story-ring user-chip-avatar-fallback">' + escapeHtml((head.character_name || '?').charAt(0).toUpperCase()) + '</div>';
+    chip.innerHTML = '<div class="user-chip-avatar-wrap">' + avatarHtml + '</div>' +
+      '<div class="user-chip-name">' + escapeHtml(head.character_name) + '</div>';
+    chip.onclick = function () { openStoryView(groupIndex, isHome ? 'list' : 'stories'); };
+    row.appendChild(chip);
+  });
+  if (isHome) row.style.display = storyGroups.length ? 'flex' : 'none';
 }
 
 function openStoryNewScreen() {
@@ -2444,18 +2481,22 @@ function publishStory() {
   }).catch(function (e) { showToast(e.message); });
 }
 
-function openStoryView(items) {
-  currentStoryGroup = items;
-  currentStoryIndex = 0;
+// groupIndex - чья стопка открывается; returnTo - куда вернуться при закрытии
+// (главный экран или отдельный экран "Истории", смотря откуда открыли).
+function openStoryView(groupIndex, returnTo) {
+  storyGroupIndex = groupIndex;
+  storyItemIndex = 0;
+  storyViewReturnTo = returnTo || 'list';
   showScreen('storyView');
   renderStoryProgress();
-  showStoryAt(0);
+  renderCurrentStory();
 }
 
 function renderStoryProgress() {
   var row = document.getElementById('story-progress-row');
   row.innerHTML = '';
-  currentStoryGroup.forEach(function () {
+  var group = storyGroups[storyGroupIndex] || [];
+  group.forEach(function () {
     var bar = document.createElement('div');
     bar.className = 'story-progress-bar';
     bar.innerHTML = '<span class="story-progress-fill"></span>';
@@ -2463,11 +2504,10 @@ function renderStoryProgress() {
   });
 }
 
-function showStoryAt(index) {
-  if (!currentStoryGroup || index < 0) return;
-  if (index >= currentStoryGroup.length) { closeStoryView(); return; }
-  currentStoryIndex = index;
-  var story = currentStoryGroup[index];
+function renderCurrentStory() {
+  var group = storyGroups[storyGroupIndex];
+  if (!group || !group.length) { closeStoryView(); return; }
+  var story = group[storyItemIndex];
 
   document.getElementById('story-bg').style.backgroundImage = "url('/api/tg-photo?file_id=" + encodeURIComponent(story.photo_file_id) + "')";
   var avatarEl = document.getElementById('story-view-avatar');
@@ -2481,39 +2521,74 @@ function showStoryAt(index) {
     bar.classList.remove('active', 'done');
     var fill = bar.querySelector('.story-progress-fill');
     fill.style.animation = 'none';
-    if (i < index) bar.classList.add('done');
+    if (i < storyItemIndex) bar.classList.add('done');
   });
   if (storyAdvanceTimer) { clearTimeout(storyAdvanceTimer); storyAdvanceTimer = null; }
-  var activeBar = bars[index];
+  var activeBar = bars[storyItemIndex];
   if (activeBar) {
     var fill = activeBar.querySelector('.story-progress-fill');
     void fill.offsetWidth; // форсируем reflow, иначе анимация не перезапустится на той же полосе
     activeBar.classList.add('active');
     fill.style.animation = 'story-fill ' + STORY_DURATION_MS + 'ms linear forwards';
   }
-  storyAdvanceTimer = setTimeout(function () { storyNext(); }, STORY_DURATION_MS);
+  storyAdvanceTimer = setTimeout(storyNext, STORY_DURATION_MS);
 }
 
-function storyNext() { showStoryAt(currentStoryIndex + 1); }
-function storyPrev() { showStoryAt(Math.max(0, currentStoryIndex - 1)); }
+// Досмотрели стопку одного персонажа - переходим к следующему по списку, как
+// в Instagram/Telegram, а не закрываем просмотр после каждого персонажа.
+function storyNext() {
+  var group = storyGroups[storyGroupIndex];
+  if (group && storyItemIndex + 1 < group.length) {
+    storyItemIndex += 1;
+    renderCurrentStory();
+  } else if (storyGroupIndex + 1 < storyGroups.length) {
+    storyGroupIndex += 1;
+    storyItemIndex = 0;
+    renderStoryProgress();
+    renderCurrentStory();
+  } else {
+    closeStoryView();
+  }
+}
+
+function storyPrev() {
+  if (storyItemIndex > 0) {
+    storyItemIndex -= 1;
+    renderCurrentStory();
+  } else if (storyGroupIndex > 0) {
+    storyGroupIndex -= 1;
+    storyItemIndex = Math.max(0, (storyGroups[storyGroupIndex] || []).length - 1);
+    renderStoryProgress();
+    renderCurrentStory();
+  } else {
+    renderCurrentStory();
+  }
+}
 
 function closeStoryView() {
   if (storyAdvanceTimer) { clearTimeout(storyAdvanceTimer); storyAdvanceTimer = null; }
-  currentStoryGroup = null;
-  openStoriesScreen();
+  var returnTo = storyViewReturnTo;
+  refreshStories().then(function () { showScreen(returnTo); })
+    .catch(function () { showScreen(returnTo); });
 }
 
 function deleteCurrentStory() {
-  if (!currentStoryGroup) return;
-  var story = currentStoryGroup[currentStoryIndex];
+  var group = storyGroups[storyGroupIndex];
+  var story = group && group[storyItemIndex];
   if (!story) return;
   var doDelete = function () {
     api('/api/story?id=' + story.id, { method: 'DELETE' }).then(function () {
       showToast(t('toast_story_deleted'));
-      currentStoryGroup.splice(currentStoryIndex, 1);
-      if (!currentStoryGroup.length) { closeStoryView(); return; }
+      group.splice(storyItemIndex, 1);
+      if (!group.length) {
+        storyGroups.splice(storyGroupIndex, 1);
+        if (storyGroupIndex >= storyGroups.length) { closeStoryView(); return; }
+        storyItemIndex = 0;
+      } else if (storyItemIndex >= group.length) {
+        storyItemIndex = group.length - 1;
+      }
       renderStoryProgress();
-      showStoryAt(Math.min(currentStoryIndex, currentStoryGroup.length - 1));
+      renderCurrentStory();
     }).catch(function (e) { showToast(e.message); });
   };
   var message = t('confirm_delete_story');
@@ -2804,8 +2879,7 @@ function openDmNewScreen() {
     var list = document.getElementById('dm-pick-list');
     var empty = document.getElementById('dm-pick-empty');
     list.innerHTML = '';
-    var myId = tg && tg.initDataUnsafe && tg.initDataUnsafe.user && tg.initDataUnsafe.user.id;
-    var others = (data.users || []).filter(function (u) { return String(u.user_id) !== String(myId); });
+    var others = data.users || [];
     if (!others.length) { empty.style.display = 'block'; }
     else {
       empty.style.display = 'none';
@@ -3018,7 +3092,7 @@ function leaveChat() {
     if (chatOrigin === 'category' && currentCategory) { openCategory(currentCategory); }
     else { renderCategories(); showScreen('list'); }
   }).catch(function () { showScreen('list'); loadClubs(); });
-  loadUsersList();
+  refreshStories().catch(function () {});
 }
 
 function formatMessageText(text) {
@@ -3512,6 +3586,12 @@ function loadMoreSectionCounts() {
     var countEl = document.getElementById('stories-count-text');
     if (countEl) countEl.textContent = t('stories_count')((data.stories || []).length);
   }).catch(function () {});
+  api('/api/users-list').then(function (data) {
+    var users = data.users || [];
+    var online = users.filter(function (u) { return u.online; }).length;
+    var countEl = document.getElementById('users-count-text');
+    if (countEl) countEl.textContent = t('online_count')(online);
+  }).catch(function () {});
   api('/api/dm-threads').then(function (data) {
     var threads = data.threads || [];
     var unread = threads.filter(function (th) { return th.unread; }).length;
@@ -3540,12 +3620,12 @@ function init() {
       openRegisterScreen(true);
     } else {
       showScreen('list');
-      loadUsersList();
+      refreshStories().catch(function () {});
       loadMoreSectionCounts();
     }
   }).catch(function () {
     showScreen('list');
-    loadUsersList();
+    refreshStories().catch(function () {});
     loadMoreSectionCounts();
   });
   setTimeout(dismissSplash, 2600);
