@@ -356,6 +356,39 @@
   .pick-card .birthdate { font-size: 12px; color: var(--ink-soft); }
   .pick-card.selected { border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink) inset; }
 
+  /* ---- истории: выбор фото (вертикальный формат, не круглый как аватар) ---- */
+  .story-photo-label { display: block; cursor: pointer; margin: 4px 0 16px; }
+  .story-photo-label input { display: none; }
+  .story-photo-preview {
+    width: 100%; height: 260px; object-fit: cover; display: block;
+    border-radius: var(--lp-radius-tile); border: 1px solid var(--line); background: var(--lp-surface2);
+  }
+  .story-photo-placeholder {
+    width: 100%; height: 260px; border-radius: var(--lp-radius-tile);
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+    border: 1.5px dashed var(--lp-dash); background: var(--lp-surface2);
+    color: var(--ink-soft); font-size: 13px;
+  }
+  .user-chip-avatar.story-ring { border: 2px solid var(--lp-solid); }
+
+  /* ---- истории: полноэкранный вертикальный просмотр ---- */
+  #screen-story-view { position: fixed; inset: 0; min-height: 0; background: #000; }
+  .story-bg { position: absolute; inset: 0; background-size: cover; background-position: center; background-color: #000; }
+  .story-progress-row { position: relative; z-index: 3; display: flex; gap: 4px; padding: calc(10px + env(safe-area-inset-top)) 10px 0; }
+  .story-progress-bar { flex: 1; height: 2.5px; border-radius: 2px; background: rgba(255,255,255,.3); overflow: hidden; }
+  .story-progress-fill { display: block; height: 100%; width: 0%; background: #fff; }
+  .story-progress-bar.done .story-progress-fill { width: 100%; animation: none; }
+  @keyframes story-fill { from { width: 0%; } to { width: 100%; } }
+  .story-top { position: relative; z-index: 3; display: flex; align-items: center; gap: 10px; padding: 10px 14px 0; }
+  .story-view-avatar { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; border: 1.5px solid rgba(255,255,255,.5); background: rgba(255,255,255,.15); flex-shrink: 0; }
+  .story-top-info { flex: 1; min-width: 0; }
+  .story-view-name { font-family: var(--lp-font-display); font-size: 15.5px; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.5); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .story-view-time { font-size: 11px; color: rgba(255,255,255,.75); text-shadow: 0 1px 3px rgba(0,0,0,.5); }
+  .story-top .icon-btn { background: rgba(255,255,255,.15); color: #fff; width: 34px; height: 34px; font-size: 15px; }
+  .story-tap-zone { position: absolute; top: 60px; bottom: 0; z-index: 2; width: 35%; }
+  .story-tap-zone.left { left: 0; }
+  .story-tap-zone.right { right: 0; width: 65%; }
+
   /* ---- пол персонажа: альфа/омега/гамма ---- */
   .gender-pick { display: flex; gap: 8px; margin-bottom: 4px; }
   .gender-opt {
@@ -822,6 +855,11 @@
       <span class="grid-card-name" data-i18n="btn_my_characters">Мои персонажи</span>
       <span class="grid-card-count" id="troupe-count-text"></span>
     </div>
+    <div class="grid-card" onclick="openStoriesScreen()">
+      <span class="grid-card-icon">&#128248;</span>
+      <span class="grid-card-name" data-i18n="btn_stories">Истории</span>
+      <span class="grid-card-count" id="stories-count-text"></span>
+    </div>
     <div class="grid-card create" onclick="showScreen('create')">
       <span class="grid-card-icon">+</span>
       <span class="grid-card-name" data-i18n="create_card_title">Создать локацию</span>
@@ -910,6 +948,56 @@
   <div id="user-characters-empty" class="empty-hint" style="display:none;" data-i18n="empty_user_characters">
     У этого пользователя пока нет персонажей.
   </div>
+</div>
+
+<div id="screen-stories" class="screen sub-screen">
+  <span class="back-link" onclick="showScreen('list')" data-i18n="back">&larr; Назад</span>
+  <div class="sub-title" data-i18n="stories_title">Истории</div>
+  <div id="stories-row" class="users-row"></div>
+  <div id="stories-empty" class="empty-hint" style="display:none;" data-i18n="empty_stories">
+    Активных историй пока нет.<br />Они видны 24 часа после публикации.
+  </div>
+  <div class="btn-row">
+    <button class="primary-btn" onclick="openStoryNewScreen()" data-i18n="btn_add_story">+ Добавить историю</button>
+  </div>
+</div>
+
+<div id="screen-story-new" class="screen sub-screen">
+  <span class="back-link" onclick="showScreen('stories')" data-i18n="back">&larr; Назад</span>
+  <div class="sub-title" data-i18n="story_new_title">Новая история</div>
+
+  <div class="field-label" data-i18n="label_from_character">От кого (ваш персонаж)</div>
+  <div id="story-my-characters"></div>
+
+  <label class="story-photo-label">
+    <img id="story-photo-preview" class="story-photo-preview" style="display:none;" />
+    <div id="story-photo-placeholder" class="story-photo-placeholder">
+      <span class="avatar-upload-placeholder-icon">&#128247;</span>
+      <span data-i18n="btn_choose_photo">Выбрать фотографию</span>
+    </div>
+    <input type="file" id="story-photo-input" accept="image/*" onchange="onStoryPhotoPicked(this.files[0])" />
+  </label>
+  <div id="story-photo-hint" class="avatar-upload-hint" style="display:none; text-align:center; margin:-10px 0 16px;" data-i18n="avatar_upload_replace">Заменить фото</div>
+
+  <div class="btn-row">
+    <button class="primary-btn" onclick="publishStory()" data-i18n="btn_publish_story">Опубликовать</button>
+  </div>
+</div>
+
+<div id="screen-story-view" class="screen">
+  <div class="story-bg" id="story-bg"></div>
+  <div class="story-progress-row" id="story-progress-row"></div>
+  <div class="story-top">
+    <img id="story-view-avatar" class="story-view-avatar" />
+    <div class="story-top-info">
+      <div id="story-view-name" class="story-view-name"></div>
+      <div id="story-view-time" class="story-view-time"></div>
+    </div>
+    <button id="story-delete-btn" class="icon-btn" style="display:none;" onclick="deleteCurrentStory()">&#128465;</button>
+    <button class="icon-btn" onclick="closeStoryView()">&times;</button>
+  </div>
+  <div class="story-tap-zone left" onclick="storyPrev()"></div>
+  <div class="story-tap-zone right" onclick="storyNext()"></div>
 </div>
 
 <div id="screen-character-edit" class="screen sub-screen">
@@ -1350,6 +1438,20 @@ var I18N = {
     empty_dm_threads: 'Пока нет ни одного личного сообщения.<br />Начните новое.',
     empty_dm_pick: 'Пока больше некому писать.',
     dm_unread_count: function (n) { return n ? (n + ' ' + ruPluralWord(n, 'непрочитанное', 'непрочитанных', 'непрочитанных')) : 'нет непрочитанных'; },
+
+    btn_stories: 'Истории',
+    stories_count: function (n) { return n + ' ' + ruPluralWord(n, 'активная', 'активных', 'активных'); },
+    stories_title: 'Истории',
+    empty_stories: 'Активных историй пока нет.<br />Они видны 24 часа после публикации.',
+    btn_add_story: '+ Добавить историю',
+    story_new_title: 'Новая история',
+    btn_publish_story: 'Опубликовать',
+    toast_story_published: 'История опубликована.',
+    toast_story_deleted: 'История удалена.',
+    confirm_delete_story: 'Удалить эту историю?',
+    story_just_now: 'только что',
+    story_minutes_ago: function (n) { return n + ' ' + ruPluralWord(n, 'минуту', 'минуты', 'минут') + ' назад'; },
+    story_hours_ago: function (n) { return n + ' ' + ruPluralWord(n, 'час', 'часа', 'часов') + ' назад'; },
   },
   en: {
     app_title: 'Clubs',
@@ -1506,6 +1608,20 @@ var I18N = {
     empty_dm_threads: 'No private messages yet.<br />Start a new one.',
     empty_dm_pick: 'No one else to message yet.',
     dm_unread_count: function (n) { return n ? (n + ' unread') : 'no unread'; },
+
+    btn_stories: 'Stories',
+    stories_count: function (n) { return n + ' active'; },
+    stories_title: 'Stories',
+    empty_stories: 'No active stories yet.<br />They stay visible for 24 hours after posting.',
+    btn_add_story: '+ Add story',
+    story_new_title: 'New story',
+    btn_publish_story: 'Publish',
+    toast_story_published: 'Story published.',
+    toast_story_deleted: 'Story deleted.',
+    confirm_delete_story: 'Delete this story?',
+    story_just_now: 'just now',
+    story_minutes_ago: function (n) { return n + (n === 1 ? ' minute' : ' minutes') + ' ago'; },
+    story_hours_ago: function (n) { return n + (n === 1 ? ' hour' : ' hours') + ' ago'; },
   },
 };
 var uiLang = 'ru';
@@ -1556,6 +1672,7 @@ var screens = {
   characterView: 'screen-character-view', userCharacters: 'screen-user-characters',
   sms: 'screen-sms', smsNew: 'screen-sms-new', smsChat: 'screen-sms-chat',
   register: 'screen-register', dm: 'screen-dm', dmNew: 'screen-dm-new', dmChat: 'screen-dm-chat',
+  stories: 'screen-stories', storyNew: 'screen-story-new', storyView: 'screen-story-view',
 };
 var allClubs = [];
 var currentCategory = null;
@@ -1606,6 +1723,14 @@ var ytReady = false;
 var musicOn = false;
 var clubsPollTimer = null;
 
+var storyGroups = [];
+var currentStoryGroup = null;
+var currentStoryIndex = 0;
+var storyAdvanceTimer = null;
+var storySelectedCharacterId = null;
+var storyPhotoFileId = null;
+var STORY_DURATION_MS = 5000;
+
 var currentScreenName = 'list';
 
 function showScreen(name) {
@@ -1648,13 +1773,15 @@ function updateTelegramBackButton() {
 
 function handleTelegramBack() {
   switch (currentScreenName) {
-    case 'category': case 'create': case 'characters': case 'sms': case 'dm': showScreen('list'); break;
+    case 'category': case 'create': case 'characters': case 'sms': case 'dm': case 'stories': showScreen('list'); break;
     case 'characterEdit': backFromCharacterEdit(); break;
     case 'characterPick': cancelCharacterPick(); break;
     case 'characterView': leaveCharacterView(); break;
     case 'userCharacters': showScreen('list'); break;
     case 'smsNew': showScreen('sms'); break;
     case 'dmNew': showScreen('dm'); break;
+    case 'storyNew': showScreen('stories'); break;
+    case 'storyView': closeStoryView(); break;
     case 'register': if (!registerMandatory) showScreen('list'); break;
     case 'settings': showScreen('chat'); break;
     case 'chat': leaveChat(); break;
@@ -2192,6 +2319,209 @@ function deleteCharacter() {
 function backFromCharacterEdit() {
   if (characterEditReturnTo === 'pick') openCharacterPickScreen();
   else openCharactersScreen();
+}
+
+// ---------- истории: фото от лица персонажа, живут 24 часа ----------
+
+function openStoriesScreen() {
+  api('/api/stories').then(function (data) {
+    renderStoriesRow(data.stories || []);
+    showScreen('stories');
+  }).catch(function (e) { showToast(e.message); });
+}
+
+// Группируем плоский список по персонажу-автору - в ленте одна карточка на
+// персонажа (как в Instagram/Telegram), а не одна на каждое фото.
+function groupStoriesByCharacter(list) {
+  var byChar = {};
+  var order = [];
+  list.forEach(function (s) {
+    if (!byChar[s.character_id]) { byChar[s.character_id] = []; order.push(s.character_id); }
+    byChar[s.character_id].push(s);
+  });
+  return order.map(function (id) { return byChar[id]; });
+}
+
+function renderStoriesRow(list) {
+  storyGroups = groupStoriesByCharacter(list);
+  var row = document.getElementById('stories-row');
+  var empty = document.getElementById('stories-empty');
+  row.innerHTML = '';
+  if (!storyGroups.length) {
+    empty.style.display = 'block';
+  } else {
+    empty.style.display = 'none';
+    storyGroups.forEach(function (items) {
+      var head = items[items.length - 1];
+      var chip = document.createElement('div');
+      chip.className = 'user-chip';
+      var avatarHtml = head.character_avatar_file_id
+        ? '<img class="user-chip-avatar story-ring" src="/api/tg-photo?file_id=' + encodeURIComponent(head.character_avatar_file_id) + '" />'
+        : '<div class="user-chip-avatar story-ring user-chip-avatar-fallback">' + escapeHtml((head.character_name || '?').charAt(0).toUpperCase()) + '</div>';
+      chip.innerHTML = '<div class="user-chip-avatar-wrap">' + avatarHtml + '</div>' +
+        '<div class="user-chip-name">' + escapeHtml(head.character_name) + '</div>';
+      chip.onclick = function () { openStoryView(items); };
+      row.appendChild(chip);
+    });
+  }
+}
+
+function openStoryNewScreen() {
+  storySelectedCharacterId = null;
+  storyPhotoFileId = null;
+  document.getElementById('story-photo-preview').style.display = 'none';
+  document.getElementById('story-photo-placeholder').style.display = 'flex';
+  document.getElementById('story-photo-hint').style.display = 'none';
+  api('/api/characters').then(function (data) {
+    myCharacters = data.characters;
+    renderStoryCharacterPickList(data.characters);
+    showScreen('storyNew');
+  }).catch(function (e) { showToast(e.message); });
+}
+
+function renderStoryCharacterPickList(list) {
+  var el = document.getElementById('story-my-characters');
+  el.innerHTML = '';
+  if (!list.length) {
+    var hint = document.createElement('div');
+    hint.className = 'empty-hint';
+    hint.textContent = t('toast_create_own_character_first');
+    el.appendChild(hint);
+    return;
+  }
+  list.forEach(function (ch) {
+    var card = document.createElement('div');
+    card.className = 'pick-card';
+    card.innerHTML = '<img class="avatar-thumb" src="/api/tg-photo?file_id=' + encodeURIComponent(ch.avatar_file_id) + '">' +
+      '<div class="info"><div class="name">' + escapeHtml(ch.name) + genderBadge(ch.gender) + '</div>' +
+      (ch.birthdate ? '<div class="birthdate">' + escapeHtml(formatBirthdate(ch.birthdate)) + '</div>' : '') + '</div>';
+    card.onclick = function () {
+      storySelectedCharacterId = ch.id;
+      var siblings = el.querySelectorAll('.pick-card');
+      for (var i = 0; i < siblings.length; i++) siblings[i].classList.remove('selected');
+      card.classList.add('selected');
+    };
+    el.appendChild(card);
+  });
+  if (list.length === 1) {
+    storySelectedCharacterId = list[0].id;
+    el.firstChild.classList.add('selected');
+  }
+}
+
+function onStoryPhotoPicked(file) {
+  if (!file) return;
+  showToast(t('toast_uploading_photo'));
+  fetch('/api/story-photo', {
+    method: 'POST',
+    headers: { 'Content-Type': file.type || 'image/jpeg', 'X-Tg-Init-Data': (tg && tg.initData) || '' },
+    body: file
+  }).then(function (r) { return r.json().then(function (d) { if (!r.ok) throw new Error(d.error); return d; }); })
+    .then(function (data) {
+      storyPhotoFileId = data.photo_file_id;
+      var preview = document.getElementById('story-photo-preview');
+      preview.src = '/api/tg-photo?file_id=' + encodeURIComponent(data.photo_file_id);
+      preview.style.display = 'block';
+      document.getElementById('story-photo-placeholder').style.display = 'none';
+      document.getElementById('story-photo-hint').style.display = 'block';
+      showToast(t('toast_photo_uploaded'));
+    }).catch(function (e) { showToast(e.message); });
+}
+
+function publishStory() {
+  if (!storySelectedCharacterId) return showToast(t('toast_choose_own_character'));
+  if (!storyPhotoFileId) return showToast(t('toast_upload_photo'));
+  api('/api/stories', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ character_id: storySelectedCharacterId, photo_file_id: storyPhotoFileId })
+  }).then(function () {
+    showToast(t('toast_story_published'));
+    openStoriesScreen();
+  }).catch(function (e) { showToast(e.message); });
+}
+
+function openStoryView(items) {
+  currentStoryGroup = items;
+  currentStoryIndex = 0;
+  showScreen('storyView');
+  renderStoryProgress();
+  showStoryAt(0);
+}
+
+function renderStoryProgress() {
+  var row = document.getElementById('story-progress-row');
+  row.innerHTML = '';
+  currentStoryGroup.forEach(function () {
+    var bar = document.createElement('div');
+    bar.className = 'story-progress-bar';
+    bar.innerHTML = '<span class="story-progress-fill"></span>';
+    row.appendChild(bar);
+  });
+}
+
+function showStoryAt(index) {
+  if (!currentStoryGroup || index < 0) return;
+  if (index >= currentStoryGroup.length) { closeStoryView(); return; }
+  currentStoryIndex = index;
+  var story = currentStoryGroup[index];
+
+  document.getElementById('story-bg').style.backgroundImage = "url('/api/tg-photo?file_id=" + encodeURIComponent(story.photo_file_id) + "')";
+  var avatarEl = document.getElementById('story-view-avatar');
+  avatarEl.src = story.character_avatar_file_id ? ('/api/tg-photo?file_id=' + encodeURIComponent(story.character_avatar_file_id)) : '';
+  document.getElementById('story-view-name').textContent = story.character_name;
+  document.getElementById('story-view-time').textContent = formatStoryAge(story.created_at);
+  document.getElementById('story-delete-btn').style.display = (myUserId() && String(story.owner_id) === myUserId()) ? 'flex' : 'none';
+
+  var bars = document.querySelectorAll('#story-progress-row .story-progress-bar');
+  bars.forEach(function (bar, i) {
+    bar.classList.remove('active', 'done');
+    var fill = bar.querySelector('.story-progress-fill');
+    fill.style.animation = 'none';
+    if (i < index) bar.classList.add('done');
+  });
+  if (storyAdvanceTimer) { clearTimeout(storyAdvanceTimer); storyAdvanceTimer = null; }
+  var activeBar = bars[index];
+  if (activeBar) {
+    var fill = activeBar.querySelector('.story-progress-fill');
+    void fill.offsetWidth; // форсируем reflow, иначе анимация не перезапустится на той же полосе
+    activeBar.classList.add('active');
+    fill.style.animation = 'story-fill ' + STORY_DURATION_MS + 'ms linear forwards';
+  }
+  storyAdvanceTimer = setTimeout(function () { storyNext(); }, STORY_DURATION_MS);
+}
+
+function storyNext() { showStoryAt(currentStoryIndex + 1); }
+function storyPrev() { showStoryAt(Math.max(0, currentStoryIndex - 1)); }
+
+function closeStoryView() {
+  if (storyAdvanceTimer) { clearTimeout(storyAdvanceTimer); storyAdvanceTimer = null; }
+  currentStoryGroup = null;
+  openStoriesScreen();
+}
+
+function deleteCurrentStory() {
+  if (!currentStoryGroup) return;
+  var story = currentStoryGroup[currentStoryIndex];
+  if (!story) return;
+  var doDelete = function () {
+    api('/api/story?id=' + story.id, { method: 'DELETE' }).then(function () {
+      showToast(t('toast_story_deleted'));
+      currentStoryGroup.splice(currentStoryIndex, 1);
+      if (!currentStoryGroup.length) { closeStoryView(); return; }
+      renderStoryProgress();
+      showStoryAt(Math.min(currentStoryIndex, currentStoryGroup.length - 1));
+    }).catch(function (e) { showToast(e.message); });
+  };
+  var message = t('confirm_delete_story');
+  if (tg && tg.showConfirm) tg.showConfirm(message, function (ok) { if (ok) doDelete(); });
+  else if (window.confirm(message)) doDelete();
+}
+
+function formatStoryAge(iso) {
+  var mins = Math.max(0, Math.floor((Date.now() - parseDbTime(iso).getTime()) / 60000));
+  if (mins < 1) return t('story_just_now');
+  if (mins < 60) return t('story_minutes_ago')(mins);
+  return t('story_hours_ago')(Math.floor(mins / 60));
 }
 
 // ---------- SMS: личные сообщения между персонажами ----------
@@ -3173,6 +3503,10 @@ function loadMoreSectionCounts() {
   api('/api/characters').then(function (data) {
     var countEl = document.getElementById('troupe-count-text');
     if (countEl) countEl.textContent = t('troupe_count')((data.characters || []).length);
+  }).catch(function () {});
+  api('/api/stories').then(function (data) {
+    var countEl = document.getElementById('stories-count-text');
+    if (countEl) countEl.textContent = t('stories_count')((data.stories || []).length);
   }).catch(function () {});
   api('/api/dm-threads').then(function (data) {
     var threads = data.threads || [];
