@@ -463,8 +463,8 @@
     border-radius: var(--lp-radius-pill); padding: 11px 16px; color: var(--ink); font-size: 14.5px;
     font-family: inherit; line-height: 1.35; resize: none; overflow-y: auto; max-height: 120px;
   }
-  .tick { margin-left: 4px; opacity: 0.7; }
-  .tick.read { opacity: 1; color: var(--ink); }
+  .tick { margin-left: 4px; opacity: 0.7; color: inherit; }
+  .tick.read { opacity: 1; }
   .empty-hint { text-align: center; color: var(--ink-soft); font-size: 14px; margin: 30px 10px; line-height: 1.6; }
 
   .primary-btn {
@@ -1930,10 +1930,12 @@ function loadUsersList() {
 function renderUsersList(users) {
   var row = document.getElementById('users-row');
   row.innerHTML = '';
-  var onlineCount = users.filter(function (u) { return u.online; }).length;
+  var myId = tg && tg.initDataUnsafe && tg.initDataUnsafe.user && tg.initDataUnsafe.user.id;
+  var others = users.filter(function (u) { return String(u.user_id) !== String(myId); });
+  var onlineCount = others.filter(function (u) { return u.online; }).length;
   var onlineEl = document.getElementById('online-count-text');
   if (onlineEl) onlineEl.textContent = t('online_count')(onlineCount);
-  users.forEach(function (u) {
+  others.forEach(function (u) {
     var chip = document.createElement('div');
     chip.className = 'user-chip';
     var avatarHtml = u.photo_url
