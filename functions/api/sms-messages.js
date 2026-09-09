@@ -80,7 +80,7 @@ export async function onRequestGet(context) {
   if (!access) return json({ error: "Нет доступа к этой переписке." }, 403);
 
   const { results } = await env.DB.prepare(
-    "SELECT cm.id, cm.sender_user_id, cm.character_name, cm.character_avatar_file_id, cm.text, cm.created_at, cm.edited_at, cm.reply_to_id, " +
+    "SELECT cm.id, cm.sender_user_id, cm.character_name, cm.character_avatar_file_id, cm.text, cm.created_at, cm.edited_at, cm.reply_to_id, cm.photo_file_id, " +
       "rm.text AS reply_text, rm.character_name AS reply_character_name " +
       "FROM sms_messages cm LEFT JOIN sms_messages rm ON rm.id = cm.reply_to_id " +
       "WHERE cm.thread_id = ? AND (cm.id > ? OR (cm.edited_at IS NOT NULL AND cm.edited_at > ?)) ORDER BY cm.id ASC LIMIT 200"
@@ -90,7 +90,7 @@ export async function onRequestGet(context) {
     const message = {
       id: row.id, sender_user_id: row.sender_user_id, character_name: row.character_name,
       character_avatar_file_id: row.character_avatar_file_id, text: row.text,
-      created_at: row.created_at, edited_at: row.edited_at,
+      created_at: row.created_at, edited_at: row.edited_at, photo_file_id: row.photo_file_id,
     };
     if (row.reply_to_id) {
       message.reply = { id: row.reply_to_id, text: row.reply_text, character_name: row.reply_character_name };
@@ -118,7 +118,8 @@ export async function onRequestPost(context) {
 
   const body = await context.request.json();
   const text = (body.text || "").trim();
-  if (!text) return json({ error: "Пустое сообщение." }, 400);
+  const photoFileId = body.photo_file_id || null;
+  if (!text && !photoFileId) return json({ error: "Пустое сообщение." }, 400);
   if (text.length > 4000) return json({ error: "Слишком длинное сообщение." }, 400);
 
   let replyTo = null;
@@ -132,10 +133,10 @@ export async function onRequestPost(context) {
   let message = null;
   try {
     message = await env.DB.prepare(
-      "INSERT INTO sms_messages (thread_id, sender_user_id, character_id, character_name, character_avatar_file_id, text, reply_to_id) " +
-        "VALUES (?, ?, ?, ?, ?, ?, ?) " +
-        "RETURNING id, sender_user_id, character_name, character_avatar_file_id, text, created_at, edited_at, reply_to_id"
-    ).bind(threadId, String(userId), access.mine.id, access.mine.name, access.mine.avatar_file_id, text, replyTo ? replyTo.id : null).first();
+      "INSERT INTO sms_messages (thread_id, sender_user_id, character_id, character_name, character_avatar_file_id, text, reply_to_id, photo_file_id) " +
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?) " +
+        "RETURNING id, sender_user_id, character_name, character_avatar_file_id, text, created_at, edited_at, reply_to_id, photo_file_id"
+    ).bind(threadId, String(userId), access.mine.id, access.mine.name, access.mine.avatar_file_id, text, replyTo ? replyTo.id : null, photoFileId).first();
   } catch (e) {
     console.log("Ошибка отправки SMS:", e.message);
     return json({ error: "Не удалось отправить сообщение." }, 500);

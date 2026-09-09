@@ -390,6 +390,18 @@
   .story-tap-zone { position: absolute; top: 60px; bottom: 0; z-index: 2; width: 35%; }
   .story-tap-zone.left { left: 0; }
   .story-tap-zone.right { right: 0; width: 65%; }
+  .story-like-btn {
+    position: absolute; right: 16px; bottom: calc(20px + env(safe-area-inset-bottom)); z-index: 4;
+    width: 52px; height: 52px; border-radius: 50%; border: none;
+    background: rgba(255,255,255,.15); backdrop-filter: blur(10px);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 26px; color: #fff; line-height: 1;
+  }
+  .story-like-btn.liked { color: #ff4d6d; }
+  .story-like-info {
+    position: absolute; left: 14px; right: 80px; bottom: calc(34px + env(safe-area-inset-bottom)); z-index: 4;
+    font-size: 12.5px; color: rgba(255,255,255,.85); text-shadow: 0 1px 3px rgba(0,0,0,.5);
+  }
 
   /* ---- пол персонажа: альфа/омега/гамма ---- */
   .gender-pick { display: flex; gap: 8px; margin-bottom: 4px; }
@@ -688,6 +700,11 @@
     background: transparent; border: none; color: var(--ink-soft);
     font-size: 20px; line-height: 1; padding: 2px 6px; flex-shrink: 0; cursor: pointer;
   }
+  .sms-photo-attach-preview {
+    display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+    background: var(--panel); border-top: 1px solid var(--line);
+  }
+  .sms-photo-attach-preview .photo-attach-remove { margin-left: auto; }
 
   /* ---- настройки локации ---- */
   #screen-settings { padding: 22px var(--lp-gutter) 60px; }
@@ -1014,6 +1031,10 @@
   </div>
   <div class="story-tap-zone left" onclick="storyPrev()"></div>
   <div class="story-tap-zone right" onclick="storyNext()"></div>
+  <button id="story-like-btn" class="story-like-btn" style="display:none;" onclick="event.stopPropagation(); toggleStoryLike();">
+    <span id="story-like-icon">&#9825;</span>
+  </button>
+  <div id="story-like-info" class="story-like-info" style="display:none;"></div>
 </div>
 
 <div id="screen-character-edit" class="screen sub-screen">
@@ -1187,7 +1208,15 @@
     <div class="txt"><span data-i18n="reply_to_prefix">Ответ на:</span> <span id="sms-reply-preview-text"></span></div>
     <button class="secondary" onclick="cancelSmsReply()" data-i18n="cancel">Отмена</button>
   </div>
+  <div id="sms-photo-attach-preview" class="sms-photo-attach-preview" style="display:none;">
+    <img id="sms-photo-attach-thumb" class="photo-attach-thumb" />
+    <button type="button" class="photo-attach-remove" onclick="removeSmsAttachedPhoto()">&times;</button>
+  </div>
   <div class="sms-input-row">
+    <label class="icon-btn attach-btn">
+      &#128206;
+      <input type="file" id="sms-photo-input" accept="image/*" style="display:none;" onchange="onSmsPhotoPicked(this.files[0])" />
+    </label>
     <textarea id="sms-msg-input" rows="1" data-i18n-ph="message_placeholder" placeholder="Сообщение..." maxlength="4000"></textarea>
     <button class="send-btn" onclick="sendSmsMessage()">&#10148;</button>
   </div>
@@ -1482,6 +1511,7 @@ var I18N = {
     story_just_now: 'только что',
     story_minutes_ago: function (n) { return n + ' ' + ruPluralWord(n, 'минуту', 'минуты', 'минут') + ' назад'; },
     story_hours_ago: function (n) { return n + ' ' + ruPluralWord(n, 'час', 'часа', 'часов') + ' назад'; },
+    story_liked_by: function (names) { return '♥ Нравится: ' + names; },
 
     btn_users: 'Участники',
     users_title: 'Участники',
@@ -1658,6 +1688,7 @@ var I18N = {
     story_just_now: 'just now',
     story_minutes_ago: function (n) { return n + (n === 1 ? ' minute' : ' minutes') + ' ago'; },
     story_hours_ago: function (n) { return n + (n === 1 ? ' hour' : ' hours') + ' ago'; },
+    story_liked_by: function (names) { return '♥ Liked by: ' + names; },
 
     btn_users: 'Participants',
     users_title: 'Participants',
@@ -1748,6 +1779,7 @@ var smsOtherReadId = 0;
 var smsEditingMessageId = null;
 var smsForceScrollToBottom = false;
 var smsReplyToId = null;
+var pendingSmsPhotoFileId = null;
 
 var myProfile = null;
 var registerAvatarFileId = null;
@@ -2528,7 +2560,9 @@ function renderCurrentStory() {
   avatarEl.src = story.character_avatar_file_id ? ('/api/tg-photo?file_id=' + encodeURIComponent(story.character_avatar_file_id)) : '';
   document.getElementById('story-view-name').textContent = story.character_name;
   document.getElementById('story-view-time').textContent = formatStoryAge(story.created_at);
-  document.getElementById('story-delete-btn').style.display = (myUserId() && String(story.owner_id) === myUserId()) ? 'flex' : 'none';
+  var mine = !!(myUserId() && String(story.owner_id) === myUserId());
+  document.getElementById('story-delete-btn').style.display = mine ? 'flex' : 'none';
+  updateStoryLikeUI(story, mine);
 
   var bars = document.querySelectorAll('#story-progress-row .story-progress-bar');
   bars.forEach(function (bar, i) {
@@ -2546,6 +2580,39 @@ function renderCurrentStory() {
     fill.style.animation = 'story-fill ' + STORY_DURATION_MS + 'ms linear forwards';
   }
   storyAdvanceTimer = setTimeout(storyNext, STORY_DURATION_MS);
+}
+
+// На своих историях вместо кнопки лайка - кто уже лайкнул (лайкнуть себя
+// нельзя); на чужих - сердечко-тумблер, заполняется при лайке.
+function updateStoryLikeUI(story, mine) {
+  var btn = document.getElementById('story-like-btn');
+  var info = document.getElementById('story-like-info');
+  if (mine) {
+    btn.style.display = 'none';
+    var likers = story.likers || [];
+    if (likers.length) {
+      info.style.display = 'block';
+      info.textContent = t('story_liked_by')(likers.join(', '));
+    } else {
+      info.style.display = 'none';
+    }
+  } else {
+    info.style.display = 'none';
+    btn.style.display = 'flex';
+    btn.classList.toggle('liked', !!story.liked_by_me);
+    document.getElementById('story-like-icon').innerHTML = story.liked_by_me ? '&#9829;' : '&#9825;';
+  }
+}
+
+function toggleStoryLike() {
+  var group = storyGroups[storyGroupIndex];
+  var story = group && group[storyItemIndex];
+  if (!story) return;
+  api('/api/story-like?id=' + story.id, { method: 'POST' }).then(function (data) {
+    story.liked_by_me = data.liked;
+    story.like_count = Math.max(0, (story.like_count || 0) + (data.liked ? 1 : -1));
+    updateStoryLikeUI(story, false);
+  }).catch(function (e) { showToast(e.message); });
 }
 
 // Досмотрели стопку одного персонажа - переходим к следующему по списку, как
@@ -2746,7 +2813,11 @@ function renderSmsMessage(m) {
       '<span class="msg-reply-quote-name">' + escapeHtml(m.reply.character_name || '') + '</span>' +
       '<span class="msg-reply-quote-text">' + escapeHtml(replyText) + '</span></div>';
   }
-  div.innerHTML = replyHtml + '<div>' + formatMessageText(m.text) + '</div>' +
+  var photoHtml = m.photo_file_id
+    ? '<div class="msg-photo-wrap"><img class="msg-photo" src="/api/tg-photo?file_id=' + encodeURIComponent(m.photo_file_id) + '"></div>'
+    : '';
+  var textHtml = m.text ? ('<div>' + formatMessageText(m.text) + '</div>') : '';
+  div.innerHTML = replyHtml + photoHtml + textHtml +
     '<div class="msg-time">' + time + editedTag + tick + '</div>';
   div.style.cursor = 'pointer';
   div.onclick = function () { if (mine) startSmsEditMessage(m); else startSmsReply(m); };
@@ -2825,12 +2896,35 @@ function cancelSmsReply() {
   document.getElementById('sms-reply-banner').classList.remove('show');
 }
 
+function onSmsPhotoPicked(file) {
+  if (!file) return;
+  showToast(t('toast_uploading_photo'));
+  fetch('/api/sms-photo', {
+    method: 'POST',
+    headers: { 'Content-Type': file.type || 'image/jpeg', 'X-Tg-Init-Data': (tg && tg.initData) || '' },
+    body: file
+  }).then(function (r) { return r.json().then(function (d) { if (!r.ok) throw new Error(d.error); return d; }); })
+    .then(function (data) {
+      pendingSmsPhotoFileId = data.photo_file_id;
+      document.getElementById('sms-photo-attach-thumb').src = '/api/tg-photo?file_id=' + encodeURIComponent(pendingSmsPhotoFileId);
+      document.getElementById('sms-photo-attach-preview').style.display = 'flex';
+      showToast(t('toast_photo_ready'));
+    }).catch(function (e) { showToast(e.message); });
+}
+
+function removeSmsAttachedPhoto() {
+  pendingSmsPhotoFileId = null;
+  document.getElementById('sms-photo-attach-preview').style.display = 'none';
+  document.getElementById('sms-photo-input').value = '';
+}
+
 function sendSmsMessage() {
   var input = document.getElementById('sms-msg-input');
   var text = input.value.trim();
-  if (!text || !currentSmsThread) return;
+  if (!currentSmsThread) return;
 
   if (smsEditingMessageId) {
+    if (!text) return;
     var id = smsEditingMessageId;
     input.value = '';
     autoGrowTextarea(input);
@@ -2842,13 +2936,16 @@ function sendSmsMessage() {
     return;
   }
 
+  if (!text && !pendingSmsPhotoFileId) return;
   var replyToId = smsReplyToId;
+  var photoFileId = pendingSmsPhotoFileId;
   input.value = '';
   autoGrowTextarea(input);
   input.focus();
   cancelSmsReply();
+  removeSmsAttachedPhoto();
   api('/api/sms-messages?thread_id=' + currentSmsThread.id, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: text, reply_to_id: replyToId })
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: text, reply_to_id: replyToId, photo_file_id: photoFileId })
   }).then(function () { smsForceScrollToBottom = true; pollSmsMessages(); }).catch(function (e) { showToast(e.message); });
 }
 document.getElementById('sms-msg-input').addEventListener('input', function () { autoGrowTextarea(this); });
