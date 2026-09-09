@@ -421,7 +421,7 @@
   .sms-thread-card .name { font-family: var(--lp-font-display); font-size: 20px; color: var(--ink); }
   .sms-thread-card .sub { font-size: 12px; color: var(--ink-soft); }
   #screen-sms-chat.active, #screen-dm-chat.active {
-    position: fixed; inset: 0; min-height: 0; display: flex; flex-direction: column;
+    position: fixed; inset: 0; min-height: 0; height: var(--tg-vh, 100vh); display: flex; flex-direction: column;
     background: var(--lp-sms-bg);
   }
   .sms-messages { min-height: 0; }
@@ -535,7 +535,7 @@
   .sub-title { font-size: var(--lp-text-h2); font-weight: 600; letter-spacing: -0.01em; color: var(--ink); margin: 0 0 18px; }
 
   /* ---- чат ---- */
-  #screen-chat { position: fixed; inset: 0; min-height: 0; }
+  #screen-chat { position: fixed; inset: 0; min-height: 0; height: var(--tg-vh, 100vh); }
   .chat-bg {
     position: fixed; inset: 0;
     background-size: cover; background-position: center;
@@ -1264,10 +1264,24 @@
 
 <script>
 var tg = window.Telegram && window.Telegram.WebApp;
+
+// Telegram-клиент иногда сообщает браузеру CSS-вьюпорт выше, чем то, что
+// реально видно на экране (перекрыто нижним чатом/жестовой зоной) - обычный
+// 100vh/position:fixed;inset:0 в таком случае съезжает за пределы видимого,
+// и строка ввода внизу экрана оказывается недоступна. tg.viewportStableHeight -
+// собственная, надёжная оценка Telegram того, сколько реально видно.
+function applyTgViewportHeight() {
+  if (!tg) return;
+  var h = tg.viewportStableHeight || tg.viewportHeight || window.innerHeight;
+  if (h) document.documentElement.style.setProperty('--tg-vh', h + 'px');
+}
 if (tg) {
   tg.ready(); tg.expand();
+  applyTgViewportHeight();
+  tg.onEvent('viewportChanged', applyTgViewportHeight);
   if (tg.BackButton) tg.BackButton.onClick(handleTelegramBack);
 }
+window.addEventListener('resize', applyTgViewportHeight);
 
 function applyTheme(theme) {
   document.documentElement.setAttribute('data-theme', theme);
