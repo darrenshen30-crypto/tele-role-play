@@ -384,7 +384,8 @@
     border: 1.5px dashed var(--lp-dash); background: var(--lp-surface2);
     color: var(--ink-soft); font-size: 13px;
   }
-  .user-chip-avatar.story-ring { border: 2px solid var(--lp-solid); }
+  .user-chip-avatar.story-ring.seen { border: 2px solid var(--line); }
+  .user-chip-avatar.story-ring.unseen { border: 2px solid #2ecc71; }
 
   /* ---- истории: полноэкранный вертикальный просмотр ---- */
   #screen-story-view { position: fixed; inset: 0; min-height: 0; background: #000; }
@@ -2506,11 +2507,13 @@ function renderStoriesRowInto(containerId, isHome) {
   row.innerHTML = '';
   storyGroups.forEach(function (items, groupIndex) {
     var head = items[items.length - 1];
+    var unseen = items.some(function (s) { return !s.viewed_by_me; });
+    var ringClass = 'story-ring ' + (unseen ? 'unseen' : 'seen');
     var chip = document.createElement('div');
     chip.className = 'user-chip';
     var avatarHtml = head.character_avatar_file_id
-      ? '<img class="user-chip-avatar story-ring" src="/api/tg-photo?file_id=' + encodeURIComponent(head.character_avatar_file_id) + '" />'
-      : '<div class="user-chip-avatar story-ring user-chip-avatar-fallback">' + escapeHtml((head.character_name || '?').charAt(0).toUpperCase()) + '</div>';
+      ? '<img class="user-chip-avatar ' + ringClass + '" src="/api/tg-photo?file_id=' + encodeURIComponent(head.character_avatar_file_id) + '" />'
+      : '<div class="user-chip-avatar ' + ringClass + ' user-chip-avatar-fallback">' + escapeHtml((head.character_name || '?').charAt(0).toUpperCase()) + '</div>';
     chip.innerHTML = '<div class="user-chip-avatar-wrap">' + avatarHtml + '</div>' +
       '<div class="user-chip-name">' + escapeHtml(head.character_name) + '</div>';
     chip.onclick = function () { openStoryView(groupIndex, isHome ? 'list' : 'stories'); };
@@ -2656,6 +2659,7 @@ function renderCurrentStory() {
   updateStoryLikeUI(story, mine);
   closeStoryLikeCharacterPicker();
   renderStoryTagsRow(story);
+  markStoryViewed(story);
 
   var bars = document.querySelectorAll('#story-progress-row .story-progress-bar');
   bars.forEach(function (bar, i) {
@@ -2693,6 +2697,16 @@ function renderStoryTagsRow(story) {
     chip.onclick = function (e) { e.stopPropagation(); openCharacterView(tag.character_id, 'storyView'); };
     row.appendChild(chip);
   });
+}
+
+// Отмечаем историю просмотренной сразу как она показана - зелёное кольцо на
+// аватаре в ленте (renderStoriesRowInto) погаснет только после
+// refreshStories() (вызывается при закрытии просмотра), поэтому здесь
+// достаточно один раз дёрнуть сервер и не ждать ответа для UI.
+function markStoryViewed(story) {
+  if (story.viewed_by_me) return;
+  story.viewed_by_me = true;
+  api('/api/story-view?id=' + story.id, { method: 'POST' }).catch(function () {});
 }
 
 // На своих историях вместо кнопки лайка - кто уже лайкнул, теперь по имени
