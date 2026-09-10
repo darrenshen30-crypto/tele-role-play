@@ -436,7 +436,10 @@
   .gender-opt.selected.alpha { background: #3f6fb0; border-color: #3f6fb0; color: #fff; }
   .gender-opt.selected.omega { background: #c05a86; border-color: #c05a86; color: #fff; }
   .gender-opt.selected.gamma { background: #8a5cc4; border-color: #8a5cc4; color: #fff; }
-  .gender-badge { font-weight: 700; margin-left: 5px; }
+  /* значок пола рисуется в системном шрифте (Cormorant Garamond таких глифов
+     не содержит) - без vertical-align он садится на базовую линию своего
+     шрифта, а не текста рядом, и визуально съезжает ниже имени. */
+  .gender-badge { font-weight: 700; margin-left: 5px; vertical-align: middle; }
   .gender-badge.alpha { color: #6fa3e0; }
   .gender-badge.omega { color: #e089ac; }
   .gender-badge.gamma { color: #b58bea; }
