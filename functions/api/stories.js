@@ -57,6 +57,22 @@ export async function onRequestGet(context) {
     if (String(s.owner_id) === String(userId)) s.likers = likersByStory[s.id] || [];
   });
 
+  // Отметки персонажей - видны всем (как подпись "с ..." в Instagram), не
+  // приватная информация в отличие от лайков. Снапшот в story_tags, тот же
+  // паттерн, что и у самой истории/лайков - можно отметить и своего, и
+  // персонажа второго человека.
+  const { results: tagRows } = await env.DB.prepare(
+    "SELECT story_id, character_id, character_name, character_avatar_file_id " +
+      "FROM story_tags WHERE story_id IN (SELECT id FROM stories WHERE created_at > datetime('now', '-1 day'))"
+  ).all();
+  const tagsByStory = {};
+  (tagRows || []).forEach(function (row) {
+    (tagsByStory[row.story_id] = tagsByStory[row.story_id] || []).push({
+      character_id: row.character_id, name: row.character_name, avatar_file_id: row.character_avatar_file_id,
+    });
+  });
+  stories.forEach(function (s) { s.tags = tagsByStory[s.id] || []; });
+
   return json({ stories: stories });
 }
 
@@ -77,6 +93,20 @@ export async function onRequestPost(context) {
     return json({ error: "Это не ваш персонаж." }, 403);
   }
 
+  // Отметить можно любого персонажа, включая персонажа второго человека -
+  // это открытая функция вроде тегов в Instagram, а не приватная (как SMS,
+  // где адресную книгу нарочно ограничили).
+  const rawTagIds = Array.isArray(body.tagged_character_ids) ? body.tagged_character_ids : [];
+  const tagIds = Array.from(new Set(rawTagIds.map(Number).filter(function (n) { return n && n !== character.id; })));
+  let taggedCharacters = [];
+  if (tagIds.length) {
+    const placeholders = tagIds.map(function () { return "?"; }).join(",");
+    const { results } = await env.DB.prepare(
+      "SELECT id, name, avatar_file_id FROM characters WHERE id IN (" + placeholders + ")"
+    ).bind(...tagIds).all();
+    taggedCharacters = results || [];
+  }
+
   let story = null;
   try {
     story = await env.DB.prepare(
@@ -84,10 +114,17 @@ export async function onRequestPost(context) {
         "VALUES (?, ?, ?, ?, ?) " +
         "RETURNING id, owner_id, character_id, character_name, character_avatar_file_id, photo_file_id, created_at"
     ).bind(String(userId), character.id, character.name, character.avatar_file_id, photoFileId).first();
+
+    for (const tagged of taggedCharacters) {
+      await env.DB.prepare(
+        "INSERT INTO story_tags (story_id, character_id, character_name, character_avatar_file_id) VALUES (?, ?, ?, ?)"
+      ).bind(story.id, tagged.id, tagged.name, tagged.avatar_file_id).run();
+    }
   } catch (e) {
     console.log("Ошибка публикации истории:", e.message);
     return json({ error: "Не удалось опубликовать историю." }, 500);
   }
 
+  story.tags = taggedCharacters.map(function (c) { return { character_id: c.id, name: c.name, avatar_file_id: c.avatar_file_id }; });
   return json({ story: story });
 }

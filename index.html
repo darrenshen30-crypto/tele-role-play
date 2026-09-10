@@ -358,6 +358,19 @@
   .pick-card .birthdate { font-size: 12px; color: var(--ink-soft); }
   .pick-card.selected { border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink) inset; }
 
+  /* ---- истории: отметить персонажей (тумблер, не радио как у "от кого") ---- */
+  .story-tag-picker-list { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
+  .story-tag-pick-card { position: relative; display: flex; flex-direction: column; align-items: center; gap: 5px; width: 62px; cursor: pointer; opacity: .55; }
+  .story-tag-pick-card.selected { opacity: 1; }
+  .story-tag-pick-card .avatar-thumb { width: 50px; height: 50px; border-radius: 50%; object-fit: cover; border: 2px solid transparent; }
+  .story-tag-pick-card.selected .avatar-thumb { border-color: var(--ink); }
+  .story-tag-pick-card .name { font-size: 11px; color: var(--ink); text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+  .story-tag-pick-check {
+    display: none; position: absolute; top: -2px; right: 4px; width: 17px; height: 17px; border-radius: 50%;
+    background: var(--ink); color: var(--panel); font-size: 10px; align-items: center; justify-content: center;
+  }
+  .story-tag-pick-card.selected .story-tag-pick-check { display: flex; }
+
   /* ---- истории: выбор фото (вертикальный формат, не круглый как аватар) ---- */
   .story-photo-label { display: block; cursor: pointer; margin: 4px 0 16px; }
   .story-photo-label input { display: none; }
@@ -387,6 +400,13 @@
   .story-view-name { font-family: var(--lp-font-display); font-size: 15.5px; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.5); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .story-view-time { font-size: 11px; color: rgba(255,255,255,.75); text-shadow: 0 1px 3px rgba(0,0,0,.5); }
   .story-top .icon-btn { background: rgba(255,255,255,.15); color: #fff; width: 34px; height: 34px; font-size: 15px; }
+  .story-view-tags { position: relative; z-index: 3; display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 14px 0 58px; }
+  .story-view-tag-chip {
+    display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px 3px 3px; border-radius: var(--lp-radius-pill);
+    background: rgba(255,255,255,.15); backdrop-filter: blur(10px); cursor: pointer;
+    font-size: 11.5px; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.5);
+  }
+  .story-view-tag-chip img { width: 18px; height: 18px; border-radius: 50%; object-fit: cover; }
   .story-tap-zone { position: absolute; top: 60px; bottom: 0; z-index: 2; width: 35%; }
   .story-tap-zone.left { left: 0; }
   .story-tap-zone.right { right: 0; width: 65%; }
@@ -1037,6 +1057,9 @@
   </label>
   <div id="story-photo-hint" class="avatar-upload-hint" style="display:none; text-align:center; margin:-10px 0 16px;" data-i18n="avatar_upload_replace">Заменить фото</div>
 
+  <div class="field-label" data-i18n="label_tag_characters">Отметить персонажей</div>
+  <div id="story-tag-picker-list" class="story-tag-picker-list"></div>
+
   <div class="btn-row">
     <button class="primary-btn" onclick="publishStory()" data-i18n="btn_publish_story">Опубликовать</button>
   </div>
@@ -1054,6 +1077,7 @@
     <button id="story-delete-btn" class="icon-btn" style="display:none;" onclick="deleteCurrentStory()">&#128465;</button>
     <button class="icon-btn" onclick="closeStoryView()">&times;</button>
   </div>
+  <div id="story-view-tags" class="story-view-tags" style="display:none;"></div>
   <div class="story-tap-zone left" onclick="storyPrev()"></div>
   <div class="story-tap-zone right" onclick="storyNext()"></div>
   <button id="story-like-btn" class="story-like-btn" style="display:none;" onclick="event.stopPropagation(); toggleStoryLike();">
@@ -1478,6 +1502,7 @@ var I18N = {
     btn_write_sms: '+ Написать SMS',
     sms_new_title: 'Новая переписка',
     label_from_character: 'От кого (ваш персонаж)',
+    label_tag_characters: 'Отметить персонажей',
     label_to_character: 'Кому (персонаж собеседника)',
     btn_start_conversation: 'Начать переписку',
     default_interlocutor: 'Собеседник',
@@ -1657,6 +1682,7 @@ var I18N = {
     btn_write_sms: '+ New SMS',
     sms_new_title: 'New conversation',
     label_from_character: 'From (your character)',
+    label_tag_characters: 'Tag characters',
     label_to_character: 'To (the other character)',
     btn_start_conversation: 'Start conversation',
     default_interlocutor: 'Contact',
@@ -1840,6 +1866,7 @@ var storyViewReturnTo = 'list';
 var storyAdvanceTimer = null;
 var storySelectedCharacterId = null;
 var storyPhotoFileId = null;
+var storyTaggedIds = [];
 var STORY_DURATION_MS = 5000;
 
 var currentScreenName = 'list';
@@ -2297,6 +2324,9 @@ var characterViewReturnTo = 'chat';
 
 function openCharacterView(id, returnTo) {
   characterViewReturnTo = returnTo || 'chat';
+  // Открыт из просмотра историй - останавливаем автопереход, иначе за время
+  // просмотра профиля история успеет пролистаться или закрыться сама.
+  if (characterViewReturnTo === 'storyView' && storyAdvanceTimer) { clearTimeout(storyAdvanceTimer); storyAdvanceTimer = null; }
   api('/api/character-view?id=' + id).then(function (data) {
     var ch = data.character;
     if (!ch) return showToast(t('toast_character_not_found'));
@@ -2323,6 +2353,7 @@ function openCharacterView(id, returnTo) {
 
 function leaveCharacterView() {
   showScreen(characterViewReturnTo);
+  if (characterViewReturnTo === 'storyView') renderCurrentStory();
 }
 
 function pad2(n) { return n < 10 ? '0' + n : String(n); }
@@ -2491,12 +2522,14 @@ function renderStoriesRowInto(containerId, isHome) {
 function openStoryNewScreen() {
   storySelectedCharacterId = null;
   storyPhotoFileId = null;
+  storyTaggedIds = [];
   document.getElementById('story-photo-preview').style.display = 'none';
   document.getElementById('story-photo-placeholder').style.display = 'flex';
   document.getElementById('story-photo-hint').style.display = 'none';
-  api('/api/characters').then(function (data) {
-    myCharacters = data.characters;
-    renderStoryCharacterPickList(data.characters);
+  Promise.all([api('/api/characters'), api('/api/other-characters')]).then(function (data) {
+    myCharacters = data[0].characters;
+    renderStoryCharacterPickList(myCharacters);
+    renderStoryTagPickList(myCharacters.concat(data[1].characters || []));
     showScreen('storyNew');
   }).catch(function (e) { showToast(e.message); });
 }
@@ -2531,6 +2564,29 @@ function renderStoryCharacterPickList(list) {
   }
 }
 
+// Отметить можно любого персонажа, включая персонажа второго человека -
+// поэтому список для тегов объединяет /api/characters и /api/other-characters
+// (в отличие от адресной книги SMS, тут это нарочно открытая функция).
+// Тумблер, не радио - карточка может быть выбрана автором как "от кого"
+// одновременно, сервер сам отбросит такой самотег.
+function renderStoryTagPickList(list) {
+  var el = document.getElementById('story-tag-picker-list');
+  el.innerHTML = '';
+  list.forEach(function (ch) {
+    var card = document.createElement('div');
+    card.className = 'story-tag-pick-card';
+    card.innerHTML = '<img class="avatar-thumb" src="/api/tg-photo?file_id=' + encodeURIComponent(ch.avatar_file_id) + '">' +
+      '<div class="name">' + escapeHtml(ch.name) + '</div>' +
+      '<span class="story-tag-pick-check">&#10003;</span>';
+    card.onclick = function () {
+      var idx = storyTaggedIds.indexOf(ch.id);
+      if (idx === -1) { storyTaggedIds.push(ch.id); card.classList.add('selected'); }
+      else { storyTaggedIds.splice(idx, 1); card.classList.remove('selected'); }
+    };
+    el.appendChild(card);
+  });
+}
+
 function onStoryPhotoPicked(file) {
   if (!file) return;
   showToast(t('toast_uploading_photo'));
@@ -2555,7 +2611,7 @@ function publishStory() {
   if (!storyPhotoFileId) return showToast(t('toast_upload_photo'));
   api('/api/stories', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ character_id: storySelectedCharacterId, photo_file_id: storyPhotoFileId })
+    body: JSON.stringify({ character_id: storySelectedCharacterId, photo_file_id: storyPhotoFileId, tagged_character_ids: storyTaggedIds })
   }).then(function () {
     showToast(t('toast_story_published'));
     openStoriesScreen();
@@ -2599,6 +2655,7 @@ function renderCurrentStory() {
   document.getElementById('story-delete-btn').style.display = mine ? 'flex' : 'none';
   updateStoryLikeUI(story, mine);
   closeStoryLikeCharacterPicker();
+  renderStoryTagsRow(story);
 
   var bars = document.querySelectorAll('#story-progress-row .story-progress-bar');
   bars.forEach(function (bar, i) {
@@ -2616,6 +2673,26 @@ function renderCurrentStory() {
     fill.style.animation = 'story-fill ' + STORY_DURATION_MS + 'ms linear forwards';
   }
   storyAdvanceTimer = setTimeout(storyNext, STORY_DURATION_MS);
+}
+
+// Отметки персонажей видны всем, в отличие от лайков - тап открывает
+// профиль персонажа (свой или второго человека, тегать можно любого).
+function renderStoryTagsRow(story) {
+  var row = document.getElementById('story-view-tags');
+  var tags = story.tags || [];
+  if (!tags.length) { row.style.display = 'none'; row.innerHTML = ''; return; }
+  row.style.display = 'flex';
+  row.innerHTML = '';
+  tags.forEach(function (tag) {
+    var chip = document.createElement('span');
+    chip.className = 'story-view-tag-chip';
+    var avatar = tag.avatar_file_id
+      ? '<img src="/api/tg-photo?file_id=' + encodeURIComponent(tag.avatar_file_id) + '">'
+      : '';
+    chip.innerHTML = avatar + escapeHtml(tag.name);
+    chip.onclick = function (e) { e.stopPropagation(); openCharacterView(tag.character_id, 'storyView'); };
+    row.appendChild(chip);
+  });
 }
 
 // На своих историях вместо кнопки лайка - кто уже лайкнул, теперь по имени
