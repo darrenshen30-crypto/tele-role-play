@@ -40,16 +40,18 @@ export async function onRequestGet(context) {
   });
 
   // Кто именно лайкнул - видно только автору истории, остальным только факт
-  // своего лайка (liked_by_me выше). Отдельный запрос, чтобы не тянуть имена
+  // своего лайка (liked_by_me выше). Показываем персонажа лайкнувшего (снятый
+  // на момент лайка снапшот в story_likes), а не реальный аккаунт - лайк
+  // ставится от лица персонажа. Отдельный запрос, чтобы не тянуть имена
   // лайкнувших чужие истории.
   const { results: likerRows } = await env.DB.prepare(
-    "SELECT sl.story_id, COALESCE(up.display_name, up.name, 'Кто-то') AS name " +
-      "FROM story_likes sl JOIN stories s ON s.id = sl.story_id LEFT JOIN user_presence up ON up.user_id = sl.user_id " +
+    "SELECT sl.story_id, sl.character_name AS name, sl.character_avatar_file_id AS avatar_file_id " +
+      "FROM story_likes sl JOIN stories s ON s.id = sl.story_id " +
       "WHERE s.owner_id = ? AND s.created_at > datetime('now', '-1 day')"
   ).bind(String(userId)).all();
   const likersByStory = {};
   (likerRows || []).forEach(function (row) {
-    (likersByStory[row.story_id] = likersByStory[row.story_id] || []).push(row.name);
+    (likersByStory[row.story_id] = likersByStory[row.story_id] || []).push({ name: row.name, avatar_file_id: row.avatar_file_id });
   });
   stories.forEach(function (s) {
     if (String(s.owner_id) === String(userId)) s.likers = likersByStory[s.id] || [];

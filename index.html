@@ -399,9 +399,31 @@
   }
   .story-like-btn.liked { color: #ff4d6d; }
   .story-like-info {
-    position: absolute; left: 14px; right: 80px; bottom: calc(34px + env(safe-area-inset-bottom)); z-index: 4;
-    font-size: 12.5px; color: rgba(255,255,255,.85); text-shadow: 0 1px 3px rgba(0,0,0,.5);
+    position: absolute; left: 14px; right: 80px; bottom: calc(20px + env(safe-area-inset-bottom)); z-index: 4;
+    display: flex; flex-wrap: wrap; gap: 6px;
   }
+  .story-liker-chip {
+    display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px 4px 4px; border-radius: var(--lp-radius-pill);
+    background: rgba(255,255,255,.15); backdrop-filter: blur(10px);
+    font-size: 12px; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.5);
+  }
+  .story-liker-avatar { width: 20px; height: 20px; border-radius: 50%; object-fit: cover; flex-shrink: 0; background: rgba(255,255,255,.25); }
+  .story-liker-avatar-fallback { display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; }
+
+  /* ---- истории: от чьего лица ставится лайк (если персонажей несколько) ---- */
+  .story-like-char-picker {
+    position: absolute; inset: 0; z-index: 5; display: flex; align-items: flex-end; justify-content: center;
+    background: rgba(0,0,0,.55);
+  }
+  .story-like-char-sheet {
+    width: 100%; background: var(--panel); border-radius: var(--lp-radius-tile) var(--lp-radius-tile) 0 0;
+    padding: 16px 14px calc(16px + env(safe-area-inset-bottom));
+  }
+  .story-like-char-title { font-family: var(--lp-font-display); font-size: 15px; color: var(--ink); margin-bottom: 12px; text-align: center; }
+  .story-like-char-list { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+  .story-like-char-card { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 68px; cursor: pointer; }
+  .story-like-char-card .avatar-thumb { width: 56px; height: 56px; border-radius: 50%; object-fit: cover; }
+  .story-like-char-card .name { font-size: 12px; color: var(--ink); text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
 
   /* ---- пол персонажа: альфа/омега/гамма ---- */
   .gender-pick { display: flex; gap: 8px; margin-bottom: 4px; }
@@ -1035,6 +1057,12 @@
     <span id="story-like-icon">&#9825;</span>
   </button>
   <div id="story-like-info" class="story-like-info" style="display:none;"></div>
+  <div id="story-like-char-picker" class="story-like-char-picker" style="display:none;" onclick="closeStoryLikeCharacterPicker()">
+    <div class="story-like-char-sheet" onclick="event.stopPropagation();">
+      <div class="story-like-char-title" data-i18n="story_pick_liker_title">От чьего лица лайк?</div>
+      <div id="story-like-char-list" class="story-like-char-list"></div>
+    </div>
+  </div>
 </div>
 
 <div id="screen-character-edit" class="screen sub-screen">
@@ -1512,6 +1540,8 @@ var I18N = {
     story_minutes_ago: function (n) { return n + ' ' + ruPluralWord(n, 'минуту', 'минуты', 'минут') + ' назад'; },
     story_hours_ago: function (n) { return n + ' ' + ruPluralWord(n, 'час', 'часа', 'часов') + ' назад'; },
     story_liked_by: function (names) { return '♥ Нравится: ' + names; },
+    story_liked_by_label: '♥ Нравится:',
+    story_pick_liker_title: 'От чьего лица лайк?',
 
     btn_users: 'Участники',
     users_title: 'Участники',
@@ -1689,6 +1719,8 @@ var I18N = {
     story_minutes_ago: function (n) { return n + (n === 1 ? ' minute' : ' minutes') + ' ago'; },
     story_hours_ago: function (n) { return n + (n === 1 ? ' hour' : ' hours') + ' ago'; },
     story_liked_by: function (names) { return '♥ Liked by: ' + names; },
+    story_liked_by_label: '♥ Liked by:',
+    story_pick_liker_title: 'Like as which character?',
 
     btn_users: 'Participants',
     users_title: 'Participants',
@@ -2563,6 +2595,7 @@ function renderCurrentStory() {
   var mine = !!(myUserId() && String(story.owner_id) === myUserId());
   document.getElementById('story-delete-btn').style.display = mine ? 'flex' : 'none';
   updateStoryLikeUI(story, mine);
+  closeStoryLikeCharacterPicker();
 
   var bars = document.querySelectorAll('#story-progress-row .story-progress-bar');
   bars.forEach(function (bar, i) {
@@ -2582,8 +2615,9 @@ function renderCurrentStory() {
   storyAdvanceTimer = setTimeout(storyNext, STORY_DURATION_MS);
 }
 
-// На своих историях вместо кнопки лайка - кто уже лайкнул (лайкнуть себя
-// нельзя); на чужих - сердечко-тумблер, заполняется при лайке.
+// На своих историях вместо кнопки лайка - кто уже лайкнул, теперь по имени
+// персонажа-лайкнувшего (не аккаунта) с его аватаром; лайкнуть себя нельзя.
+// На чужих историях - сердечко-тумблер, заполняется при лайке.
 function updateStoryLikeUI(story, mine) {
   var btn = document.getElementById('story-like-btn');
   var info = document.getElementById('story-like-info');
@@ -2591,10 +2625,16 @@ function updateStoryLikeUI(story, mine) {
     btn.style.display = 'none';
     var likers = story.likers || [];
     if (likers.length) {
-      info.style.display = 'block';
-      info.textContent = t('story_liked_by')(likers.join(', '));
+      info.style.display = 'flex';
+      info.innerHTML = likers.map(function (l) {
+        var avatar = l.avatar_file_id
+          ? '<img class="story-liker-avatar" src="/api/tg-photo?file_id=' + encodeURIComponent(l.avatar_file_id) + '">'
+          : '<span class="story-liker-avatar story-liker-avatar-fallback">' + escapeHtml((l.name || '?').charAt(0).toUpperCase()) + '</span>';
+        return '<span class="story-liker-chip">' + avatar + escapeHtml(l.name) + '</span>';
+      }).join('');
     } else {
       info.style.display = 'none';
+      info.innerHTML = '';
     }
   } else {
     info.style.display = 'none';
@@ -2604,11 +2644,64 @@ function updateStoryLikeUI(story, mine) {
   }
 }
 
+// Лайк ставится от лица персонажа, не аккаунта. Если персонаж один - берём
+// его без лишних вопросов; если несколько - спрашиваем один раз и помним
+// выбор в localStorage (снять лайк не требует персонажа - это просто тумблер
+// по user_id, персонаж нужен только чтобы поставить новый лайк).
 function toggleStoryLike() {
   var group = storyGroups[storyGroupIndex];
   var story = group && group[storyItemIndex];
   if (!story) return;
-  api('/api/story-like?id=' + story.id, { method: 'POST' }).then(function (data) {
+  if (story.liked_by_me) {
+    sendStoryLikeToggle(story, null);
+    return;
+  }
+  ensureMyCharactersLoaded().then(function () {
+    if (!myCharacters.length) return showToast(t('toast_create_own_character_first'));
+    if (myCharacters.length === 1) {
+      sendStoryLikeToggle(story, myCharacters[0].id);
+      return;
+    }
+    var remembered = localStorage.getItem('story_like_character_id');
+    var stillMine = remembered && myCharacters.some(function (ch) { return String(ch.id) === String(remembered); });
+    if (stillMine) { sendStoryLikeToggle(story, remembered); return; }
+    openStoryLikeCharacterPicker(story);
+  }).catch(function (e) { showToast(e.message); });
+}
+
+function ensureMyCharactersLoaded() {
+  if (myCharacters.length) return Promise.resolve();
+  return api('/api/characters').then(function (data) { myCharacters = data.characters; });
+}
+
+function openStoryLikeCharacterPicker(story) {
+  var wrap = document.getElementById('story-like-char-picker');
+  var list = document.getElementById('story-like-char-list');
+  list.innerHTML = '';
+  myCharacters.forEach(function (ch) {
+    var card = document.createElement('div');
+    card.className = 'story-like-char-card';
+    card.innerHTML = '<img class="avatar-thumb" src="/api/tg-photo?file_id=' + encodeURIComponent(ch.avatar_file_id) + '">' +
+      '<div class="name">' + escapeHtml(ch.name) + '</div>';
+    card.onclick = function () {
+      localStorage.setItem('story_like_character_id', ch.id);
+      wrap.style.display = 'none';
+      sendStoryLikeToggle(story, ch.id);
+    };
+    list.appendChild(card);
+  });
+  wrap.style.display = 'flex';
+}
+
+function closeStoryLikeCharacterPicker() {
+  document.getElementById('story-like-char-picker').style.display = 'none';
+}
+
+function sendStoryLikeToggle(story, characterId) {
+  var body = characterId ? { character_id: characterId } : {};
+  api('/api/story-like?id=' + story.id, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+  }).then(function (data) {
     story.liked_by_me = data.liked;
     story.like_count = Math.max(0, (story.like_count || 0) + (data.liked ? 1 : -1));
     updateStoryLikeUI(story, false);

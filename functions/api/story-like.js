@@ -1,7 +1,10 @@
 // functions/api/story-like.js — поставить/убрать лайк на историю (тумблер).
-// Свою историю лайкнуть нельзя. Кто именно лайкнул, видно только автору
-// истории (отдаётся вместе с /api/stories как likers) - остальным виден
-// только тот факт, что лайк у них самих стоит (liked_by_me).
+// Свою историю лайкнуть нельзя. Лайк ставится от лица персонажа лайкнувшего,
+// не аккаунта, поэтому запрос на постановку лайка (не на снятие) обязан
+// прислать character_id - имя/аватар персонажа снимаются на момент лайка
+// (тот же снапшот-паттерн, что у stories.character_name). Кто именно лайкнул,
+// видно только автору истории (отдаётся вместе с /api/stories как likers) -
+// остальным виден только тот факт, что лайк у них самих стоит (liked_by_me).
 
 function json(obj, status = 200) {
   return new Response(JSON.stringify(obj), { status: status, headers: { "Content-Type": "application/json" } });
@@ -33,7 +36,19 @@ export async function onRequestPost(context) {
       await env.DB.prepare("DELETE FROM story_likes WHERE story_id = ? AND user_id = ?").bind(id, String(userId)).run();
       return json({ liked: false });
     }
-    await env.DB.prepare("INSERT INTO story_likes (story_id, user_id) VALUES (?, ?)").bind(id, String(userId)).run();
+
+    let body = {};
+    try { body = await context.request.json(); } catch (e) { body = {}; }
+    const characterId = body.character_id;
+    if (!characterId) return json({ error: "Выберите своего персонажа для лайка." }, 400);
+
+    const character = await env.DB.prepare("SELECT id, name, avatar_file_id FROM characters WHERE id = ? AND owner_id = ?")
+      .bind(characterId, String(userId)).first();
+    if (!character) return json({ error: "Это не ваш персонаж." }, 403);
+
+    await env.DB.prepare(
+      "INSERT INTO story_likes (story_id, user_id, character_id, character_name, character_avatar_file_id) VALUES (?, ?, ?, ?, ?)"
+    ).bind(id, String(userId), character.id, character.name, character.avatar_file_id).run();
     return json({ liked: true });
   } catch (e) {
     console.log("Ошибка лайка истории:", e.message);
