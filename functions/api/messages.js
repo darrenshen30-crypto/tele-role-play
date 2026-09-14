@@ -80,7 +80,7 @@ export async function onRequestGet(context) {
 
   const { results } = await env.DB.prepare(
     "SELECT cm.id, cm.user_id, cm.user_name, cm.text, cm.created_at, cm.edited_at, cm.character_id, cm.character_name, " +
-      "cm.character_avatar_file_id, cm.is_attention, cm.photo_file_id, cm.photo_blurred, ch.gender AS character_gender, " +
+      "cm.character_avatar_file_id, cm.is_attention, cm.photo_file_id, cm.photo_blurred, cm.dice_value, ch.gender AS character_gender, " +
       "CASE WHEN cm.photo_blurred = 0 OR cm.user_id = ? OR cpr.user_id IS NOT NULL THEN 1 ELSE 0 END AS photo_revealed " +
       "FROM club_messages cm LEFT JOIN characters ch ON ch.id = cm.character_id " +
       "LEFT JOIN club_photo_reveals cpr ON cpr.message_id = cm.id AND cpr.user_id = ? " +

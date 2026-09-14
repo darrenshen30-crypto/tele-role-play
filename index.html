@@ -655,6 +655,10 @@
   .msg-photo-reveal-hint .eye { font-size: 22px; }
 
   .ooc-note { display: block; font-style: italic; opacity: 0.85; }
+  .dice-roll { display: flex; align-items: center; gap: 10px; }
+  .dice-face { font-size: 30px; line-height: 1; display: inline-block; transition: transform .15s ease; }
+  .dice-face.settled { transform: scale(1.25); }
+  .dice-caption { font-size: 14px; }
 
   .attention-banner {
     position: relative; z-index: 2;
@@ -820,6 +824,12 @@
   .settings-hint { font-size: 11.5px; color: var(--ink-soft); line-height: 1.35; margin-top: 2px; }
   .settings-caption { font-size: 11px; color: var(--ink-soft); margin-top: 3px; }
   .footer-tagline { text-align: center; font-size: 12px; color: var(--ink-soft); margin-top: 24px; opacity: 0.8; }
+  .commands-card { margin-top: 24px; padding: 16px; border-radius: 16px; background: var(--lp-surface); border: 1px solid var(--line); }
+  .commands-title { font-size: 12.5px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; color: var(--ink-soft); margin-bottom: 10px; }
+  .command-row { display: flex; align-items: baseline; gap: 10px; margin-bottom: 8px; }
+  .command-row:last-child { margin-bottom: 0; }
+  .command-key { font-family: monospace; font-size: 13px; font-weight: 700; color: var(--ink); background: var(--lp-bg); border: 1px solid var(--line); border-radius: 6px; padding: 2px 7px; flex-shrink: 0; }
+  .command-desc { font-size: 12.5px; color: var(--ink-soft); line-height: 1.4; }
 
   /* ---- сплэш-экран при запуске ---- */
   #screen-splash {
@@ -977,6 +987,13 @@
         <span class="theme-toggle-track"><span class="theme-toggle-thumb"></span></span>
       </label>
     </div>
+  </div>
+  <div class="commands-card">
+    <div class="commands-title" data-i18n="commands_title">Форматирование и команды в чате</div>
+    <div class="command-row"><span class="command-key">*текст*</span><span class="command-desc" data-i18n="cmd_bold">Жирный текст.</span></div>
+    <div class="command-row"><span class="command-key">_текст_</span><span class="command-desc" data-i18n="cmd_italic">Курсив.</span></div>
+    <div class="command-row"><span class="command-key">#текст#</span><span class="command-desc" data-i18n="cmd_attention">Пометка «внимание» - собеседник увидит баннер, что ответ может повлиять на реакцию персонажа.</span></div>
+    <div class="command-row"><span class="command-key">/dice</span><span class="command-desc" data-i18n="cmd_dice">Бросок шестигранного кубика от лица выбранного персонажа. Видно всем в локации. Только в локациях, не в SMS и Привате.</span></div>
   </div>
   <div class="footer-tagline" data-i18n="footer_tagline">Where role turns into lore.</div>
 </div>
@@ -1407,6 +1424,7 @@ var I18N = {
     uncategorized: 'Без категории',
     guest: 'Гость',
     edited_tag: '(изменено)',
+    dice_rolled: 'Бросок кубика:',
     message_placeholder: 'Сообщение...',
 
     home_title: 'Локации',
@@ -1438,6 +1456,11 @@ var I18N = {
     theme_now_dark: 'Сейчас: тёмная',
     theme_now_light: 'Сейчас: светлая',
     footer_tagline: 'Where role turns into lore.',
+    commands_title: 'Форматирование и команды в чате',
+    cmd_bold: 'Жирный текст.',
+    cmd_italic: 'Курсив.',
+    cmd_attention: 'Пометка «внимание» - собеседник увидит баннер, что ответ может повлиять на реакцию персонажа.',
+    cmd_dice: 'Бросок шестигранного кубика от лица выбранного персонажа. Видно всем в локации. Только в локациях, не в SMS и Привате.',
 
     category_title_default: 'Категория',
 
@@ -1587,6 +1610,7 @@ var I18N = {
     uncategorized: 'Uncategorized',
     guest: 'Guest',
     edited_tag: '(edited)',
+    dice_rolled: 'Rolled the dice:',
     message_placeholder: 'Message...',
 
     home_title: 'Locations',
@@ -1618,6 +1642,11 @@ var I18N = {
     theme_now_dark: 'Now: dark',
     theme_now_light: 'Now: light',
     footer_tagline: 'Where role turns into lore.',
+    commands_title: 'Chat formatting and commands',
+    cmd_bold: 'Bold text.',
+    cmd_italic: 'Italic text.',
+    cmd_attention: 'An "attention" note - the other person sees a banner that the reply may affect their character\'s reaction.',
+    cmd_dice: 'Roll a six-sided die as your selected character. Visible to everyone in the location. Locations only, not SMS or DMs.',
 
     category_title_default: 'Category',
 
@@ -3400,6 +3429,27 @@ function formatMessageText(text) {
   return html;
 }
 
+// Юникодные грани кубика ⚀-⚅ (U+2680..U+2685) для value 1..6
+function diceFaceChar(value) {
+  return String.fromCodePoint(0x2680 + (value - 1));
+}
+// Быстро сменяет грани (случайные), затем останавливается на настоящем
+// результате - проигрывается у КАЖДОГО клиента ровно один раз, в момент когда
+// сообщение впервые приходит через опрос (после этого id уже не запрашивается
+// повторно, см. after_id в pollMessages).
+function animateDiceFace(el, finalValue) {
+  var ticks = 0;
+  var timer = setInterval(function () {
+    ticks++;
+    el.textContent = diceFaceChar(1 + Math.floor(Math.random() * 6));
+    if (ticks >= 9) {
+      clearInterval(timer);
+      el.textContent = diceFaceChar(finalValue);
+      el.classList.add('settled');
+    }
+  }, 80);
+}
+
 function tickHtml(messageId) {
   var read = messageId <= otherReadId;
   return '<span class="tick' + (read ? ' read' : '') + '">' + (read ? '✓✓' : '✓') + '</span>';
@@ -3417,7 +3467,10 @@ function renderMessage(m) {
     ? '<img class="msg-avatar" src="/api/tg-photo?file_id=' + encodeURIComponent(m.character_avatar_file_id) + '">'
     : '';
   var whoLabel = m.character_name || m.user_name || t('guest');
-  var bodyHtml = m.is_attention
+  var bodyHtml = m.dice_value
+    ? '<div class="dice-roll" data-value="' + m.dice_value + '"><span class="dice-face" id="dice-face-' + m.id + '">&#9856;</span>' +
+        '<span class="dice-caption">' + t('dice_rolled') + ' <b>' + m.dice_value + '</b></span></div>'
+    : m.is_attention
     ? '<div class="ooc-note">&#9888; ' + formatMessageText(m.text.slice(1, -1)) + '</div>'
     : formatMessageText(m.text);
   var photoHtml = '';
@@ -3428,13 +3481,17 @@ function renderMessage(m) {
       (isBlurred ? '<div class="msg-photo-reveal-hint"><span class="eye">&#128065;</span>' + t('tap_to_view') + '</div>' : '') +
       '</div>';
   }
-  var textHtml = m.text ? ('<div>' + bodyHtml + '</div>') : '';
+  var textHtml = (m.text || m.dice_value) ? ('<div>' + bodyHtml + '</div>') : '';
   div.innerHTML = '<div class="who">' + avatarHtml + escapeHtml(whoLabel) + genderBadge(m.character_gender) + '</div>' +
     photoHtml + textHtml +
     '<div class="msg-time">' + time + editedTag + tick + '</div>';
-  if (mine) {
+  if (mine && !m.dice_value) {
     div.style.cursor = 'pointer';
     div.onclick = function () { startEditMessage(m); };
+  }
+  if (m.dice_value) {
+    var faceEl = div.querySelector('#dice-face-' + m.id);
+    if (faceEl) animateDiceFace(faceEl, m.dice_value);
   }
   var whoEl = div.querySelector('.who');
   if (whoEl && m.character_id) {
@@ -3584,6 +3641,17 @@ function sendMessage() {
 
   if ((!text && !pendingPhotoFileId) || !currentClub) return;
   if (!activeCharacter) return showToast(t('toast_choose_character_first'));
+
+  if (!pendingPhotoFileId && text.toLowerCase() === '/dice') {
+    input.value = '';
+    autoGrowTextarea(input);
+    api('/api/dice?club_id=' + currentClub.id, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ character_id: activeCharacter.id })
+    }).then(function () { forceScrollToBottom = true; pollMessages(); }).catch(function (e) { showToast(e.message); });
+    return;
+  }
+
   var photoFileId = pendingPhotoFileId;
   var photoBlurred = document.getElementById('photo-attach-blur-check').checked;
   input.value = '';
