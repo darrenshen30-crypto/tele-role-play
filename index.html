@@ -460,7 +460,7 @@
   /* значок пола рисуется в системном шрифте (Cormorant Garamond таких глифов
      не содержит) - без vertical-align он садится на базовую линию своего
      шрифта, а не текста рядом, и визуально съезжает ниже имени. */
-  .gender-badge { font-weight: 700; margin-left: 5px; vertical-align: middle; }
+  .gender-badge { font-weight: 700; margin-left: 5px; display: inline-flex; align-items: center; line-height: 1; }
   .gender-badge.alpha { color: #6fa3e0; }
   .gender-badge.omega { color: #e089ac; }
   .gender-badge.gamma { color: #b58bea; }
@@ -484,6 +484,17 @@
   }
   .sms-messages { min-height: 0; }
 
+  /* ---- «прокрутить вниз», один и тот же приём в комнатах/SMS/Привате ---- */
+  .scroll-bottom-btn {
+    position: absolute; right: 16px; bottom: 86px; z-index: 5;
+    width: 38px; height: 38px; border-radius: 50%; border: none;
+    background: var(--panel); color: var(--ink); box-shadow: 0 2px 10px rgba(0,0,0,.25);
+    display: flex; align-items: center; justify-content: center; font-size: 15px; cursor: pointer;
+    opacity: 0; pointer-events: none; transform: translateY(6px);
+    transition: opacity .15s ease, transform .15s ease;
+  }
+  .scroll-bottom-btn.show { opacity: 1; pointer-events: auto; transform: translateY(0); }
+
   .sms-top {
     display: flex; align-items: center; gap: 10px; padding: 14px;
     padding-top: calc(14px + env(safe-area-inset-top));
@@ -491,6 +502,12 @@
     backdrop-filter: blur(var(--lp-blur-bar));
   }
   .sms-top .icon-btn { background: var(--lp-surface); }
+  .sms-avatars { position: relative; width: 38px; height: 38px; flex: none; }
+  .sms-avatar-main { width: 38px; height: 38px; border-radius: 50%; object-fit: cover; background: var(--lp-surface); border: 2px solid var(--panel); }
+  .sms-avatar-mini {
+    position: absolute; right: -4px; bottom: -4px; width: 20px; height: 20px; border-radius: 50%;
+    object-fit: cover; background: var(--lp-surface); border: 2px solid var(--panel);
+  }
   .sms-title-wrap { flex: 1; overflow: hidden; }
   .sms-title { font-family: var(--lp-font-display); font-size: var(--lp-text-title); color: var(--ink); white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
   .sms-subtitle { font-size: 11px; color: var(--ink-soft); }
@@ -634,6 +651,7 @@
     display: flex; flex-direction: column; gap: 10px;
   }
   .msg { max-width: 78%; padding: 10px 14px; font-size: var(--lp-text-body); line-height: 1.45; }
+  .msg a, .sms-msg a { color: inherit; text-decoration: underline; word-break: break-word; }
   .msg .who { font-size: 11px; margin-bottom: 3px; font-weight: 700; display: flex; align-items: center; gap: 5px; }
   .msg-avatar { width: 26px; height: 26px; border-radius: 50%; object-fit: cover; border: 2px solid var(--lp-line); }
   .msg.mine { align-self: flex-end; background: var(--lp-solid); color: var(--lp-solid-ink); border-radius: var(--lp-bubble-mine); border: 1px solid var(--lp-solid); }
@@ -656,9 +674,43 @@
 
   .ooc-note { display: block; font-style: italic; opacity: 0.85; }
   .dice-roll { display: flex; align-items: center; gap: 10px; }
-  .dice-face { font-size: 30px; line-height: 1; display: inline-block; transition: transform .15s ease; }
-  .dice-face.settled { transform: scale(1.25); }
+  .dice-face { font-size: 30px; line-height: 1; display: inline-block; transform: scale(1.25); }
   .dice-caption { font-size: 14px; }
+
+  /* ---- анимированный 3D-кубик поверх чата (/dice) ---- */
+  .dice-overlay {
+    position: fixed; inset: 0; z-index: 9999;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(0,0,0,0.55);
+    opacity: 0; pointer-events: none;
+    transition: opacity .2s ease;
+  }
+  .dice-overlay.active { opacity: 1; pointer-events: auto; }
+  .dice-scene { width: 88px; height: 88px; perspective: 480px; position: relative; }
+  .dice-cube {
+    width: 100%; height: 100%; position: relative;
+    transform-style: preserve-3d;
+    transform: rotateX(0deg) rotateY(0deg);
+  }
+  .dice-face-3d {
+    position: absolute; width: 88px; height: 88px; box-sizing: border-box;
+    background: #f6f2e8; border-radius: 16px;
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,.08), 0 2px 6px rgba(0,0,0,.15);
+    display: grid; grid-template-columns: repeat(3,1fr); grid-template-rows: repeat(3,1fr);
+    padding: 14px;
+  }
+  .dice-face-3d .pip { width: 15px; height: 15px; border-radius: 50%; background: #2b2b2b; justify-self: center; align-self: center; }
+  .dice-face-3d.f-front  { transform: rotateY(0deg)   translateZ(44px); }
+  .dice-face-3d.f-back   { transform: rotateY(180deg) translateZ(44px); }
+  .dice-face-3d.f-right  { transform: rotateY(90deg)  translateZ(44px); }
+  .dice-face-3d.f-left   { transform: rotateY(-90deg) translateZ(44px); }
+  .dice-face-3d.f-top    { transform: rotateX(90deg)  translateZ(44px); }
+  .dice-face-3d.f-bottom { transform: rotateX(-90deg) translateZ(44px); }
+  .dice-shadow {
+    position: absolute; left: 50%; bottom: -28px; width: 64px; height: 14px;
+    transform: translateX(-50%);
+    background: radial-gradient(ellipse at center, rgba(0,0,0,.35) 0%, rgba(0,0,0,0) 72%);
+  }
 
   .attention-banner {
     position: relative; z-index: 2;
@@ -897,7 +949,7 @@
 <div id="screen-list" class="screen active">
   <div class="greeting-title" id="greeting-title">Добрый вечер!</div>
   <div class="greeting-sub" id="greeting-sub" data-i18n="greeting_sub">вот что происходит в ваших историях.</div>
-  <div class="clock-row"><span id="clock-time">--:--</span></div>
+  <div class="clock-row"><span id="clock-time">--:--</span><span id="clock-online"></span></div>
   <div id="home-stories-row" class="users-row" style="display:none;"></div>
 
   <div class="section-header">
@@ -1227,6 +1279,7 @@
     </div>
   </div>
   <div id="dm-messages" class="sms-messages"></div>
+  <button type="button" id="dm-scroll-bottom-btn" class="scroll-bottom-btn">&#8595;</button>
   <div id="dm-edit-banner" class="playback-banner">
     <div class="txt" data-i18n="edit_message_banner">Редактирование сообщения</div>
     <button class="secondary" onclick="cancelDmEdit()" data-i18n="cancel">Отмена</button>
@@ -1267,12 +1320,17 @@
 <div id="screen-sms-chat" class="screen">
   <div class="sms-top">
     <button class="icon-btn" onclick="leaveSmsChat()">&larr;</button>
+    <div class="sms-avatars">
+      <img id="sms-chat-avatar-other" class="sms-avatar-main" />
+      <img id="sms-chat-avatar-mine" class="sms-avatar-mini" />
+    </div>
     <div class="sms-title-wrap">
       <div id="sms-chat-title" class="sms-title">Собеседник</div>
       <div id="sms-chat-subtitle" class="sms-subtitle">от лица...</div>
     </div>
   </div>
   <div id="sms-messages" class="sms-messages"></div>
+  <button type="button" id="sms-scroll-bottom-btn" class="scroll-bottom-btn">&#8595;</button>
   <div id="sms-edit-banner" class="playback-banner">
     <div class="txt" data-i18n="edit_message_banner">Редактирование сообщения</div>
     <button class="secondary" onclick="cancelSmsEdit()" data-i18n="cancel">Отмена</button>
@@ -1315,6 +1373,7 @@
     </div>
     <div id="playback-banner" class="playback-banner"></div>
     <div id="messages" class="messages"></div>
+    <button type="button" id="chat-scroll-bottom-btn" class="scroll-bottom-btn">&#8595;</button>
     <div id="edit-banner" class="playback-banner">
       <div class="txt" data-i18n="edit_message_banner">Редактирование сообщения</div>
       <button class="secondary" onclick="cancelEdit()" data-i18n="cancel">Отмена</button>
@@ -1364,6 +1423,30 @@
 <div id="toast" class="toast"></div>
 <div id="yt-player-holder"></div>
 
+<div id="dice-overlay" class="dice-overlay">
+  <div class="dice-scene">
+    <div class="dice-cube" id="dice-cube">
+      <div class="dice-face-3d f-front"><span class="pip" style="grid-column:2;grid-row:2"></span></div>
+      <div class="dice-face-3d f-top">
+        <span class="pip" style="grid-column:1;grid-row:1"></span><span class="pip" style="grid-column:3;grid-row:3"></span>
+      </div>
+      <div class="dice-face-3d f-right">
+        <span class="pip" style="grid-column:1;grid-row:1"></span><span class="pip" style="grid-column:2;grid-row:2"></span><span class="pip" style="grid-column:3;grid-row:3"></span>
+      </div>
+      <div class="dice-face-3d f-left">
+        <span class="pip" style="grid-column:1;grid-row:1"></span><span class="pip" style="grid-column:1;grid-row:3"></span><span class="pip" style="grid-column:2;grid-row:2"></span><span class="pip" style="grid-column:3;grid-row:1"></span><span class="pip" style="grid-column:3;grid-row:3"></span>
+      </div>
+      <div class="dice-face-3d f-bottom">
+        <span class="pip" style="grid-column:1;grid-row:1"></span><span class="pip" style="grid-column:1;grid-row:3"></span><span class="pip" style="grid-column:3;grid-row:1"></span><span class="pip" style="grid-column:3;grid-row:3"></span>
+      </div>
+      <div class="dice-face-3d f-back">
+        <span class="pip" style="grid-column:1;grid-row:1"></span><span class="pip" style="grid-column:1;grid-row:2"></span><span class="pip" style="grid-column:1;grid-row:3"></span><span class="pip" style="grid-column:3;grid-row:1"></span><span class="pip" style="grid-column:3;grid-row:2"></span><span class="pip" style="grid-column:3;grid-row:3"></span>
+      </div>
+    </div>
+    <div class="dice-shadow"></div>
+  </div>
+</div>
+
 <script>
 var tg = window.Telegram && window.Telegram.WebApp;
 
@@ -1379,6 +1462,7 @@ function applyTgViewportHeight() {
 }
 if (tg) {
   tg.ready(); tg.expand();
+  if (typeof tg.disableVerticalSwipes === 'function') tg.disableVerticalSwipes();
   applyTgViewportHeight();
   tg.onEvent('viewportChanged', applyTgViewportHeight);
   if (tg.BackButton) tg.BackButton.onClick(handleTelegramBack);
@@ -1971,6 +2055,26 @@ function autoGrowTextarea(el) {
   el.style.height = Math.min(el.scrollHeight, 120) + 'px';
 }
 
+// ---------- «прокрутить вниз» (один приём для комнат/SMS/Привата) ----------
+// Возвращает update() - зовём его и на scroll, и вручную после того, как в
+// ленту добавились новые сообщения (простой resize ленты сам по себе scroll
+// не генерирует).
+function setupScrollToBottomButton(boxId, btnId) {
+  var box = document.getElementById(boxId);
+  var btn = document.getElementById(btnId);
+  if (!box || !btn) return function () {};
+  function update() {
+    var notAtBottom = box.scrollHeight - box.scrollTop - box.clientHeight > 120;
+    btn.classList.toggle('show', notAtBottom);
+  }
+  box.addEventListener('scroll', update);
+  btn.addEventListener('click', function () { box.scrollTop = box.scrollHeight; });
+  return update;
+}
+var updateChatScrollBtn = setupScrollToBottomButton('messages', 'chat-scroll-bottom-btn');
+var updateSmsScrollBtn = setupScrollToBottomButton('sms-messages', 'sms-scroll-bottom-btn');
+var updateDmScrollBtn = setupScrollToBottomButton('dm-messages', 'dm-scroll-bottom-btn');
+
 // ---------- профиль (псевдоним и аватар вместо имени/фото из Telegram) ----------
 
 function updateProfileCaption() {
@@ -2333,8 +2437,11 @@ function pickGender(g) {
   }
 }
 
+// &#xFE0E; - селектор текстового (не эмодзи) начертания: без него на iOS часть
+// этих значков иногда рисуется цветным эмодзи-глифом с другими пропорциями и
+// базовой линией, из-за чего значок "прыгает" то выше, то ниже никнейма.
 function genderLabel(g) {
-  return g === 'alpha' ? '&#9794;' : g === 'omega' ? '&#9792;' : g === 'gamma' ? '&#9893;' : '';
+  return g === 'alpha' ? '&#9794;&#xFE0E;' : g === 'omega' ? '&#9792;&#xFE0E;' : g === 'gamma' ? '&#9893;&#xFE0E;' : '';
 }
 
 function genderBadge(g) {
@@ -2343,7 +2450,7 @@ function genderBadge(g) {
 
 // Полная подпись (значок + слово) - только для анкеты персонажа, не для списков.
 function genderLabelFull(g) {
-  return g === 'alpha' ? '&#9794; ' + t('gender_alpha') : g === 'omega' ? '&#9792; ' + t('gender_omega') : g === 'gamma' ? '&#9893; ' + t('gender_gamma') : '';
+  return g === 'alpha' ? '&#9794;&#xFE0E; ' + t('gender_alpha') : g === 'omega' ? '&#9792;&#xFE0E; ' + t('gender_omega') : g === 'gamma' ? '&#9893;&#xFE0E; ' + t('gender_gamma') : '';
 }
 
 function genderBadgeFull(g) {
@@ -2986,6 +3093,8 @@ function openSmsChat(threadId, myCharacter, otherCharacter) {
   document.getElementById('sms-messages').innerHTML = '';
   document.getElementById('sms-chat-title').textContent = otherCharacter.name;
   document.getElementById('sms-chat-subtitle').textContent = t('as_prefix') + myCharacter.name;
+  document.getElementById('sms-chat-avatar-other').src = otherCharacter.avatar_file_id ? '/api/tg-photo?file_id=' + encodeURIComponent(otherCharacter.avatar_file_id) : '';
+  document.getElementById('sms-chat-avatar-mine').src = myCharacter.avatar_file_id ? '/api/tg-photo?file_id=' + encodeURIComponent(myCharacter.avatar_file_id) : '';
   showScreen('smsChat');
   pollSmsMessages();
   if (smsPollTimer) clearInterval(smsPollTimer);
@@ -3077,6 +3186,7 @@ function pollSmsMessages() {
         }).catch(function () {});
       }
       updateSmsReadTicks();
+      updateSmsScrollBtn();
     }).catch(function () {});
 }
 
@@ -3314,6 +3424,7 @@ function pollDmMessages() {
         }).catch(function () {});
       }
       updateDmReadTicks();
+      updateDmScrollBtn();
     }).catch(function () {});
 }
 
@@ -3422,32 +3533,91 @@ function leaveChat() {
   refreshStories().catch(function () {});
 }
 
+// Превращает голые ссылки в кликабельные <a>. Работает уже поверх
+// escapeHtml-экранированного текста (само совпадение безопасно вставлять и в
+// текст, и в атрибут href - экранированы те же символы). stopPropagation на
+// самой ссылке нужен потому, что пузырь сообщения сам целиком кликабелен
+// (редактирование/ответ, см. renderMessage/renderSmsMessage) - без него клик
+// по ссылке одновременно открывал бы её и включал редактирование.
+function linkifyHtml(html) {
+  return html.replace(/https?:\/\/[^\s<]+/g, function (url) {
+    var trail = '';
+    while (url.length && /[.,!?:;'")\]]$/.test(url)) {
+      trail = url.slice(-1) + trail;
+      url = url.slice(0, -1);
+    }
+    if (!url) return trail;
+    return '<a href="' + url + '" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">' + url + '</a>' + trail;
+  });
+}
+
 function formatMessageText(text) {
   var html = escapeHtml(text);
   html = html.replace(/\*([^*\n]+)\*/g, '<b>$1</b>');
   html = html.replace(/_([^_\n]+)_/g, '<i>$1</i>');
+  html = linkifyHtml(html);
   return html;
 }
 
-// Юникодные грани кубика ⚀-⚅ (U+2680..U+2685) для value 1..6
+// Юникодные грани кубика ⚀-⚅ (U+2680..U+2685) для value 1..6 - используются
+// только для статичного значка результата в самом сообщении; вращение
+// показывает отдельный 3D-оверлей (showDiceOverlay), а не эта функция.
 function diceFaceChar(value) {
   return String.fromCodePoint(0x2680 + (value - 1));
 }
-// Быстро сменяет грани (случайные), затем останавливается на настоящем
-// результате - проигрывается у КАЖДОГО клиента ровно один раз, в момент когда
-// сообщение впервые приходит через опрос (после этого id уже не запрашивается
-// повторно, см. after_id в pollMessages).
-function animateDiceFace(el, finalValue) {
-  var ticks = 0;
-  var timer = setInterval(function () {
-    ticks++;
-    el.textContent = diceFaceChar(1 + Math.floor(Math.random() * 6));
-    if (ticks >= 9) {
-      clearInterval(timer);
-      el.textContent = diceFaceChar(finalValue);
-      el.classList.add('settled');
-    }
-  }, 80);
+
+// ---- анимированный 3D-кубик поверх чата (/dice) ----
+// Грани куба зафиксированы: front=1, top=2, right=3, left=4, bottom=5, back=6
+// (противоположные грани в сумме дают 7, как на настоящем кубике). Чтобы
+// нужная грань "смотрела" на игрока, поворачиваем сам куб на обратный угол.
+var DICE_FACE_TRANSFORM = {
+  1: { x: 0, y: 0 }, 2: { x: -90, y: 0 }, 3: { x: 0, y: -90 },
+  4: { x: 0, y: 90 }, 5: { x: 90, y: 0 }, 6: { x: 0, y: 180 }
+};
+var diceRevealQueue = [];
+var diceRevealBusy = false;
+
+// Крутит куб ~3 секунды и останавливает его на нужной грани, поверх всего чата
+// (как анимация кубика-эмодзи в самом Telegram), затем вызывает onDone.
+function showDiceOverlay(value, onDone) {
+  var overlay = document.getElementById('dice-overlay');
+  var cube = document.getElementById('dice-cube');
+  if (!overlay || !cube) { onDone(); return; }
+  var target = DICE_FACE_TRANSFORM[value] || DICE_FACE_TRANSFORM[1];
+  var spins = 6 + Math.floor(Math.random() * 3);
+  cube.style.transition = 'none';
+  cube.style.transform = 'rotateX(0deg) rotateY(0deg)';
+  overlay.classList.add('active');
+  void cube.offsetWidth;
+  requestAnimationFrame(function () {
+    cube.style.transition = 'transform 5.8s cubic-bezier(.21,.85,.35,1)';
+    cube.style.transform = 'rotateX(' + (spins * 360 + target.x) + 'deg) rotateY(' + (spins * 360 + target.y) + 'deg)';
+  });
+  setTimeout(function () {
+    overlay.classList.remove('active');
+    onDone();
+  }, 6000);
+}
+
+// Очередь на случай, если броски приходят почти одновременно - оверлей
+// показывает их по одному, а не поверх друг друга.
+function enqueueDiceReveal(m, box) {
+  diceRevealQueue.push({ m: m, box: box });
+  processDiceQueue();
+}
+function processDiceQueue() {
+  if (diceRevealBusy || !diceRevealQueue.length) return;
+  diceRevealBusy = true;
+  var item = diceRevealQueue.shift();
+  showDiceOverlay(item.m.dice_value, function () {
+    var box = item.box;
+    var existing = box.querySelector('[data-id="' + item.m.id + '"]');
+    var node = renderMessage(item.m);
+    if (existing) existing.replaceWith(node); else box.appendChild(node);
+    box.scrollTop = box.scrollHeight;
+    diceRevealBusy = false;
+    processDiceQueue();
+  });
 }
 
 function tickHtml(messageId) {
@@ -3468,7 +3638,7 @@ function renderMessage(m) {
     : '';
   var whoLabel = m.character_name || m.user_name || t('guest');
   var bodyHtml = m.dice_value
-    ? '<div class="dice-roll" data-value="' + m.dice_value + '"><span class="dice-face" id="dice-face-' + m.id + '">&#9856;</span>' +
+    ? '<div class="dice-roll" data-value="' + m.dice_value + '"><span class="dice-face">' + diceFaceChar(m.dice_value) + '</span>' +
         '<span class="dice-caption">' + t('dice_rolled') + ' <b>' + m.dice_value + '</b></span></div>'
     : m.is_attention
     ? '<div class="ooc-note">&#9888; ' + formatMessageText(m.text.slice(1, -1)) + '</div>'
@@ -3488,10 +3658,6 @@ function renderMessage(m) {
   if (mine && !m.dice_value) {
     div.style.cursor = 'pointer';
     div.onclick = function () { startEditMessage(m); };
-  }
-  if (m.dice_value) {
-    var faceEl = div.querySelector('#dice-face-' + m.id);
-    if (faceEl) animateDiceFace(faceEl, m.dice_value);
   }
   var whoEl = div.querySelector('.who');
   if (whoEl && m.character_id) {
@@ -3559,10 +3725,11 @@ function pollMessages() {
         var box = document.getElementById('messages');
         var wasAtBottom = isInitialLoad || forced || (box.scrollHeight - box.scrollTop - box.clientHeight < 60);
         data.messages.forEach(function (m) {
-          var existing = box.querySelector('[data-id="' + m.id + '"]');
-          if (existing) existing.replaceWith(renderMessage(m)); else box.appendChild(renderMessage(m));
           lastMessageId = Math.max(lastMessageId, m.id);
           if (m.edited_at && m.edited_at > lastEditCheck) lastEditCheck = m.edited_at;
+          if (m.dice_value && !isInitialLoad) { enqueueDiceReveal(m, box); return; }
+          var existing = box.querySelector('[data-id="' + m.id + '"]');
+          if (existing) existing.replaceWith(renderMessage(m)); else box.appendChild(renderMessage(m));
         });
         if (wasAtBottom) box.scrollTop = box.scrollHeight;
         if (isInitialLoad || forced) setTimeout(function () { box.scrollTop = box.scrollHeight; }, 150);
@@ -3572,6 +3739,7 @@ function pollMessages() {
         }).catch(function () {});
       }
       updateReadTicks();
+      updateChatScrollBtn();
     }).catch(function () {});
 }
 
@@ -3648,7 +3816,11 @@ function sendMessage() {
     api('/api/dice?club_id=' + currentClub.id, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ character_id: activeCharacter.id })
-    }).then(function () { forceScrollToBottom = true; pollMessages(); }).catch(function (e) { showToast(e.message); });
+    }).then(function (data) {
+      var m = data.message;
+      lastMessageId = Math.max(lastMessageId, m.id);
+      enqueueDiceReveal(m, document.getElementById('messages'));
+    }).catch(function (e) { showToast(e.message); });
     return;
   }
 
@@ -3957,6 +4129,8 @@ function loadMoreSectionCounts() {
     var online = users.filter(function (u) { return u.online; }).length;
     var countEl = document.getElementById('users-count-text');
     if (countEl) countEl.textContent = t('online_count')(online);
+    var clockOnlineEl = document.getElementById('clock-online');
+    if (clockOnlineEl) clockOnlineEl.textContent = ' · ' + t('online_count')(online);
   }).catch(function () {});
   api('/api/dm-threads').then(function (data) {
     var threads = data.threads || [];
