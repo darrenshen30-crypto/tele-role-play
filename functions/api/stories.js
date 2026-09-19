@@ -19,10 +19,15 @@ export async function onRequestGet(context) {
   const userId = context.data && context.data.tgUserId;
   if (!isOwner(env, userId)) return json({ error: "Нет доступа." }, 403);
 
-  context.waitUntil(
-    env.DB.prepare("DELETE FROM stories WHERE created_at <= datetime('now', '-1 day')").run()
-      .catch(function (e) { console.log("Ошибка очистки старых историй:", e.message); })
-  );
+  // Чистим не на каждый GET (это опрашивается часто), а лишь иногда - сами
+  // просроченные истории и так не попадут в выборку ниже (там свой фильтр по
+  // created_at), удаление тут только освобождает место, точный момент неважен.
+  if (Math.random() < 0.1) {
+    context.waitUntil(
+      env.DB.prepare("DELETE FROM stories WHERE created_at <= datetime('now', '-1 day')").run()
+        .catch(function (e) { console.log("Ошибка очистки старых историй:", e.message); })
+    );
+  }
 
   const { results } = await env.DB.prepare(
     "SELECT s.id, s.owner_id, s.character_id, s.character_name, s.character_avatar_file_id, s.photo_file_id, s.created_at, " +

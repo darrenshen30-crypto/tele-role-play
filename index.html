@@ -3098,7 +3098,7 @@ function openSmsChat(threadId, myCharacter, otherCharacter) {
   showScreen('smsChat');
   pollSmsMessages();
   if (smsPollTimer) clearInterval(smsPollTimer);
-  smsPollTimer = setInterval(function () { pollSmsMessages(); }, 2500);
+  smsPollTimer = setInterval(function () { pollSmsMessages(); }, 4000);
 }
 
 function leaveSmsChat() {
@@ -3355,7 +3355,7 @@ function openDmChat(threadId, other) {
   showScreen('dmChat');
   pollDmMessages();
   if (dmPollTimer) clearInterval(dmPollTimer);
-  dmPollTimer = setInterval(function () { pollDmMessages(); }, 2500);
+  dmPollTimer = setInterval(function () { pollDmMessages(); }, 4000);
 }
 
 function leaveDmChat() {
@@ -3496,7 +3496,7 @@ function openChat(club, origin) {
   showScreen('chat');
   pollTick();
   if (pollTimer) clearInterval(pollTimer);
-  pollTimer = setInterval(pollTick, 2500);
+  pollTimer = setInterval(pollTick, 4000);
 }
 
 function pollTick() {
