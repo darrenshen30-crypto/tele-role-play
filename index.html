@@ -716,8 +716,12 @@
   .attach-menu-wrap { position: relative; flex: none; }
   .attach-menu {
     position: absolute; left: 0; bottom: 46px; z-index: 40;
-    background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
-    box-shadow: 0 8px 24px rgba(0,0,0,.22); padding: 6px; min-width: 210px;
+    /* var(--panel) - это полупрозрачная "стеклянная" плашка (--lp-tile), задумана
+       для HUD-накладок поверх фона; для выпадающего меню поверх ленты сообщений
+       нужен непрозрачный фон, иначе текст сообщений под меню просвечивает и
+       накладывается на подписи кнопок. */
+    background: var(--lp-scrim-3); border: 1px solid var(--line); border-radius: 14px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.35); padding: 6px; min-width: 210px;
     display: none; flex-direction: column;
   }
   .attach-menu.show { display: flex; }
@@ -894,6 +898,10 @@
     backdrop-filter: blur(var(--lp-blur-bar));
     color: var(--ink); padding: 11px 18px; border-radius: var(--lp-radius-tile);
     font-size: 14px; opacity: 0; transition: all 0.25s ease; z-index: 50; max-width: 86%; text-align: center;
+    /* Без этого невидимый (opacity:0) тост всё равно перехватывает клики в
+       своей области - а она сидит прямо над строкой ввода сообщения, поэтому
+       после первого же тоста поле ввода "переставало" реагировать на тап. */
+    pointer-events: none;
   }
   .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
@@ -3879,23 +3887,29 @@ function sendCall(fromCharacter, toCharacter) {
 var incomingCallTimeout = null;
 var ringInterval = null;
 
+// Одна "трель" длиной ~3 секунды (как классический рингтон на айфоне), а не
+// короткий "динь" - шесть двутональных импульсов, разнесённых по всему
+// трёхсекундному окну, с паузой перед следующей трелью (см. ringInterval).
 function ringTone() {
   if (!notifyAudioCtx) return;
   try {
     if (notifyAudioCtx.state === 'suspended') notifyAudioCtx.resume();
     var t0 = notifyAudioCtx.currentTime;
-    [[880, 0], [880, 0.4]].forEach(function (pair) {
-      var osc = notifyAudioCtx.createOscillator();
-      var gain = notifyAudioCtx.createGain();
-      osc.type = 'sine';
-      osc.frequency.value = pair[0];
-      gain.gain.setValueAtTime(0.0001, t0 + pair[1]);
-      gain.gain.exponentialRampToValueAtTime(0.22, t0 + pair[1] + 0.03);
-      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + pair[1] + 0.3);
-      osc.connect(gain);
-      gain.connect(notifyAudioCtx.destination);
-      osc.start(t0 + pair[1]);
-      osc.stop(t0 + pair[1] + 0.32);
+    [0, 0.5, 1, 1.5, 2, 2.5].forEach(function (offset) {
+      [[880, 0], [1046, 0.16]].forEach(function (pair) {
+        var osc = notifyAudioCtx.createOscillator();
+        var gain = notifyAudioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = pair[0];
+        var at = t0 + offset + pair[1];
+        gain.gain.setValueAtTime(0.0001, at);
+        gain.gain.exponentialRampToValueAtTime(0.22, at + 0.03);
+        gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.28);
+        osc.connect(gain);
+        gain.connect(notifyAudioCtx.destination);
+        osc.start(at);
+        osc.stop(at + 0.3);
+      });
     });
   } catch (e) {}
 }
@@ -3908,7 +3922,7 @@ function showIncomingCallOverlay(m) {
   document.getElementById('incoming-call-overlay').classList.add('active');
   ringTone();
   if (ringInterval) clearInterval(ringInterval);
-  ringInterval = setInterval(ringTone, 2500);
+  ringInterval = setInterval(ringTone, 3500);
   if (incomingCallTimeout) clearTimeout(incomingCallTimeout);
   incomingCallTimeout = setTimeout(function () { respondToCall(false); }, 25000);
 }
