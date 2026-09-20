@@ -3288,6 +3288,7 @@ function openSmsChat(threadId, myCharacter, otherCharacter) {
 
 function leaveSmsChat() {
   if (smsPollTimer) { clearInterval(smsPollTimer); smsPollTimer = null; }
+  stopRingback();
   cancelSmsEdit();
   cancelSmsReply();
   currentSmsThread = null;
@@ -3443,7 +3444,7 @@ function sendSmsCall() {
     box.appendChild(renderSmsMessage(data.message));
     box.scrollTop = box.scrollHeight;
     showToast(t('toast_call_sent')(currentSmsThread.other.name));
-    ringTone(); // звук звонка слышит не только собеседник, но и сам звонящий
+    startRingback(); // звонящему - гудки, а не рингтон собеседника (см. ringbackTone)
   }).catch(function (e) { showToast(e.message); });
 }
 
@@ -3782,6 +3783,7 @@ function applyBackground(club) {
 function leaveChat() {
   if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
   if (playbackPollTimer) { clearInterval(playbackPollTimer); playbackPollTimer = null; }
+  stopRingback();
   stopLocalPlayback();
   cancelEdit();
   playbackKeySeen = null;
@@ -4012,7 +4014,7 @@ function sendCall(fromCharacter, toCharacter) {
     box.appendChild(renderMessage(data.message));
     box.scrollTop = box.scrollHeight;
     showToast(t('toast_call_sent')(data.call_to_name || toCharacter.name));
-    ringTone(); // звук звонка слышит не только собеседник, но и сам звонящий
+    startRingback(); // звонящему - гудки, а не рингтон собеседника (см. ringbackTone)
   }).catch(function (e) { showToast(e.message); });
 }
 
@@ -4125,6 +4127,47 @@ function ringTone() {
       });
     });
   } catch (e) {}
+}
+
+// Гудки (не рингтон) для самого звонящего, пока "ждём ответа" - короткий
+// одиночный тон, повторяющийся реже, звучит совсем не так, как трель
+// входящего вызова у собеседника (см. ringTone), чтобы их нельзя было
+// перепутать на слух. Звучит ограниченное время (как окно ответа на
+// стороне собеседника, см. incomingCallTimeout) - подряд говорить не с кем,
+// сессии звонка не существует, это просто озвучка отправки.
+var ringbackInterval = null;
+var ringbackTimeout = null;
+
+function ringbackTone() {
+  if (!notifyAudioCtx) return;
+  try {
+    if (notifyAudioCtx.state === 'suspended') notifyAudioCtx.resume();
+    var t0 = notifyAudioCtx.currentTime;
+    var osc = notifyAudioCtx.createOscillator();
+    var gain = notifyAudioCtx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = 425;
+    gain.gain.setValueAtTime(0.0001, t0);
+    gain.gain.exponentialRampToValueAtTime(0.16, t0 + 0.05);
+    gain.gain.setValueAtTime(0.16, t0 + 0.95);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 1.0);
+    osc.connect(gain);
+    gain.connect(notifyAudioCtx.destination);
+    osc.start(t0);
+    osc.stop(t0 + 1.02);
+  } catch (e) {}
+}
+
+function startRingback() {
+  stopRingback();
+  ringbackTone();
+  ringbackInterval = setInterval(ringbackTone, 3000);
+  ringbackTimeout = setTimeout(stopRingback, 25000);
+}
+
+function stopRingback() {
+  if (ringbackInterval) { clearInterval(ringbackInterval); ringbackInterval = null; }
+  if (ringbackTimeout) { clearTimeout(ringbackTimeout); ringbackTimeout = null; }
 }
 
 function showIncomingCallOverlay(m) {
