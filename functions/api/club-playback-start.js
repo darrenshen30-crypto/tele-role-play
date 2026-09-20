@@ -33,11 +33,14 @@ function extractYouTubeId(url) {
       if (id) return id;
     } else if (host === "youtube.com") {
       if (u.searchParams.get("v")) return u.searchParams.get("v");
-      const pathMatch = u.pathname.match(/^\/(?:embed|shorts)\/([A-Za-z0-9_-]{6,})/);
+      // /live/<id> - ссылка на трансляцию (в т.ч. уже отгремевшую, доступную
+      // как обычное видео) - реальный кейс, найденный в сохранённых ссылках
+      // клубов, которые молча не запускались.
+      const pathMatch = u.pathname.match(/^\/(?:embed|shorts|live)\/([A-Za-z0-9_-]{6,})/);
       if (pathMatch) return pathMatch[1];
     }
   } catch (e) {}
-  const fallback = s.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([A-Za-z0-9_-]{6,})/);
+  const fallback = s.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/|live\/))([A-Za-z0-9_-]{6,})/);
   return fallback ? fallback[1] : null;
 }
 
