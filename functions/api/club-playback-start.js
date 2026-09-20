@@ -17,10 +17,28 @@ function totalAllowed(env) {
   return String(env.OWNER_ID).split(",").map(function (s) { return s.trim(); }).filter(Boolean).length;
 }
 
+// Раньше требовал буквально "watch?v=" сразу после домена - ссылки из
+// приложения YouTube ("Поделиться") часто кладут метку "si=" ПЕРЕД "v="
+// (id не первый параметр), и такая ссылка молча не находила видео - клиенты
+// так и не получали video_id, музыка не запускалась вообще. Разбираем через
+// URL(), где порядок параметров не важен, со старым regex про запас.
 function extractYouTubeId(url) {
   if (!url) return null;
-  const m = String(url).match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([A-Za-z0-9_-]{6,})/);
-  return m ? m[1] : null;
+  const s = String(url).trim();
+  try {
+    const u = new URL(/^https?:\/\//i.test(s) ? s : "https://" + s);
+    const host = u.hostname.replace(/^(www|m|music)\./, "");
+    if (host === "youtu.be") {
+      const id = u.pathname.slice(1).split("/")[0];
+      if (id) return id;
+    } else if (host === "youtube.com") {
+      if (u.searchParams.get("v")) return u.searchParams.get("v");
+      const pathMatch = u.pathname.match(/^\/(?:embed|shorts)\/([A-Za-z0-9_-]{6,})/);
+      if (pathMatch) return pathMatch[1];
+    }
+  } catch (e) {}
+  const fallback = s.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([A-Za-z0-9_-]{6,})/);
+  return fallback ? fallback[1] : null;
 }
 
 const START_BUFFER_MS = 3000;

@@ -3813,6 +3813,12 @@ function leaveChat() {
   if (playbackPollTimer) { clearInterval(playbackPollTimer); playbackPollTimer = null; }
   stopRingback();
   stopRingTone();
+  // Незакрытое входящее оповещение не должно жить дальше комнаты - иначе
+  // его 5-секундный таймер срабатывает уже на другом экране (например,
+  // прямо когда открываешь следующую локацию) и там же звучит гудок отказа.
+  if (incomingCallTimeout) { clearTimeout(incomingCallTimeout); incomingCallTimeout = null; }
+  pendingIncomingCall = null;
+  document.getElementById('incoming-call-overlay').classList.remove('active');
   stopLocalPlayback();
   cancelEdit();
   playbackKeySeen = null;
@@ -4423,7 +4429,12 @@ function pollMessages() {
           // звонят, и только если он уже в этой комнате), теперь ещё и
           // остаётся постоянной записью в ленте у обоих - как и звонящий
           // увидит её сразу (см. sendCall), так и собеседник через опрос.
-          if (m.call_to_character_id && !isInitialLoad && m.is_incoming_call_for_me) showIncomingCallOverlay(m);
+          // !m.call_response - критично: без этой проверки уже отвеченный
+          // звонок, вернувшись через опрос со своим же обновлённым edited_at
+          // (см. call-respond.js), заново открывал бы оповещение, заново
+          // запускал трель и 5-секундный таймер автоотклонения - и так по
+          // кругу бесконечно (отсюда и "гудки без остановки").
+          if (m.call_to_character_id && !isInitialLoad && m.is_incoming_call_for_me && !m.call_response) showIncomingCallOverlay(m);
           // Перевод - тот же принцип: всплывающее оповещение только у
           // получателя и только если он уже в комнате, плюс постоянная
           // запись в ленте у обоих (см. transfer-log в renderMessage).
@@ -4658,10 +4669,27 @@ var playbackKeySeen = null;
 var scheduledTimeout = null;
 var lastPlaybackState = null;
 
+// Раньше требовал буквально "watch?v=" сразу после домена - ссылки из
+// приложения YouTube ("Поделиться") часто кладут метку "si=" ПЕРЕД "v=" (id
+// не первый параметр), и такая ссылка молча не находила видео. Разбираем
+// через URL(), где порядок параметров не важен, со старым regex про запас.
 function extractYouTubeId(url) {
   if (!url) return null;
-  var m = String(url).match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([A-Za-z0-9_-]{6,})/);
-  return m ? m[1] : null;
+  var s = String(url).trim();
+  try {
+    var u = new URL(/^https?:\/\//i.test(s) ? s : 'https://' + s);
+    var host = u.hostname.replace(/^(www|m|music)\./, '');
+    if (host === 'youtu.be') {
+      var id = u.pathname.slice(1).split('/')[0];
+      if (id) return id;
+    } else if (host === 'youtube.com') {
+      if (u.searchParams.get('v')) return u.searchParams.get('v');
+      var pathMatch = u.pathname.match(/^\/(?:embed|shorts)\/([A-Za-z0-9_-]{6,})/);
+      if (pathMatch) return pathMatch[1];
+    }
+  } catch (e) {}
+  var fallback = s.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([A-Za-z0-9_-]{6,})/);
+  return fallback ? fallback[1] : null;
 }
 
 function loadYouTubeApi() {
