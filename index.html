@@ -676,6 +676,8 @@
   .dice-roll { display: flex; align-items: center; gap: 10px; }
   .dice-face { font-size: 30px; line-height: 1; display: inline-block; transform: scale(1.25); }
   .dice-caption { font-size: 14px; }
+  .call-log, .transfer-log { display: flex; align-items: center; gap: 8px; font-size: 14px; font-style: italic; opacity: 0.9; }
+  .call-log .ic, .transfer-log .ic { font-size: 17px; flex: none; }
 
   /* ---- анимированный 3D-кубик поверх чата (/dice) ---- */
   .dice-overlay {
@@ -1412,10 +1414,15 @@
     <button type="button" class="photo-attach-remove" onclick="removeSmsAttachedPhoto()">&times;</button>
   </div>
   <div class="sms-input-row">
-    <label class="icon-btn attach-btn">
-      &#128206;
+    <div class="attach-menu-wrap">
+      <button type="button" class="icon-btn attach-btn" onclick="toggleSmsAttachMenu()">&#9776;</button>
+      <div class="attach-menu" id="sms-attach-menu">
+        <button type="button" onclick="smsAttachMenuAction('photo')"><span class="ic">&#128206;</span><span data-i18n="attach_photo">Фото</span></button>
+        <button type="button" onclick="smsAttachMenuAction('call')"><span class="ic">&#128222;</span><span data-i18n="attach_call">Позвонить</span></button>
+        <button type="button" onclick="smsAttachMenuAction('transfer')"><span class="ic">&#128181;</span><span data-i18n="attach_transfer">Перевести деньги</span></button>
+      </div>
       <input type="file" id="sms-photo-input" accept="image/*" style="display:none;" onchange="onSmsPhotoPicked(this.files[0])" />
-    </label>
+    </div>
     <textarea id="sms-msg-input" rows="1" data-i18n-ph="message_placeholder" placeholder="Сообщение..." maxlength="4000"></textarea>
     <button class="send-btn" onclick="sendSmsMessage()">&#10148;</button>
   </div>
@@ -1462,6 +1469,7 @@
           <button type="button" onclick="attachMenuAction('dice')"><span class="ic">&#127922;</span><span data-i18n="attach_dice">Бросить кубик</span></button>
           <button type="button" onclick="attachMenuAction('gift')"><span class="ic">&#127873;</span><span data-i18n="attach_gift">Отправить подарок</span></button>
           <button type="button" onclick="attachMenuAction('call')"><span class="ic">&#128222;</span><span data-i18n="attach_call">Позвонить</span></button>
+          <button type="button" onclick="attachMenuAction('transfer')"><span class="ic">&#128181;</span><span data-i18n="attach_transfer">Перевести деньги</span></button>
         </div>
         <input type="file" id="msg-photo-input" accept="image/*" style="display:none;" onchange="onMessagePhotoPicked(this.files[0])" />
         <input type="file" id="gift-photo-input" accept="image/*" style="display:none;" onchange="onGiftPhotoPicked(this.files[0])" />
@@ -1527,6 +1535,32 @@
     <div class="modal-title" id="call-picker-title"></div>
     <div id="call-picker-list"></div>
     <button type="button" class="secondary" onclick="closeCallPicker()" data-i18n="cancel">Отмена</button>
+  </div>
+</div>
+
+<div id="transfer-picker-overlay" class="call-overlay">
+  <div class="call-picker-sheet">
+    <div class="modal-title" id="transfer-picker-title"></div>
+    <div id="transfer-picker-list"></div>
+    <div id="transfer-amount-step" style="display:none;">
+      <div class="field-label" data-i18n="transfer_amount_label">Сумма в долларах</div>
+      <input type="number" id="transfer-amount-input" class="field-input" min="0.01" step="0.01" placeholder="0.00" />
+      <div class="btn-row">
+        <button type="button" class="primary-btn" onclick="confirmTransfer()" data-i18n="btn_send_transfer">Перевести</button>
+      </div>
+    </div>
+    <button type="button" class="secondary" onclick="closeTransferPicker()" data-i18n="cancel">Отмена</button>
+  </div>
+</div>
+
+<div id="sms-transfer-overlay" class="call-overlay">
+  <div class="call-picker-sheet">
+    <div class="modal-title" data-i18n="transfer_amount_label">Сумма в долларах</div>
+    <input type="number" id="sms-transfer-amount-input" class="field-input" min="0.01" step="0.01" placeholder="0.00" />
+    <div class="btn-row">
+      <button type="button" class="primary-btn" onclick="confirmSmsTransfer()" data-i18n="btn_send_transfer">Перевести</button>
+    </div>
+    <button type="button" class="secondary" onclick="closeSmsTransferPrompt()" data-i18n="cancel">Отмена</button>
   </div>
 </div>
 
@@ -1650,6 +1684,7 @@ var I18N = {
     attach_dice: 'Бросить кубик',
     attach_gift: 'Отправить подарок',
     attach_call: 'Позвонить',
+    attach_transfer: 'Перевести деньги',
     gift_tap_to_open: 'Подарок - нажмите, чтобы открыть',
     call_pick_from_title: 'От чьего лица звонить?',
     call_pick_to_title: 'Кому позвонить?',
@@ -1658,6 +1693,14 @@ var I18N = {
     incoming_call_sub: 'звонит вам',
     btn_decline_call: 'Отклонить',
     btn_accept_call: 'Принять',
+    call_log_text: function (from, to) { return from + ' позвонил(а) ' + to; },
+    transfer_pick_from_title: 'От чьего лица перевести?',
+    transfer_pick_to_title: 'Кому перевести?',
+    transfer_amount_label: 'Сумма в долларах',
+    btn_send_transfer: 'Перевести',
+    toast_enter_amount: 'Укажите сумму перевода',
+    toast_transfer_sent: function (name) { return 'Перевод отправлен: ' + name; },
+    transfer_log_text: function (from, to, amount) { return 'Перевод средств от ' + from + ' к ' + to + ': $' + amount; },
 
     category_title_default: 'Категория',
 
@@ -1849,6 +1892,7 @@ var I18N = {
     attach_dice: 'Roll a die',
     attach_gift: 'Send a gift',
     attach_call: 'Call',
+    attach_transfer: 'Send money',
     gift_tap_to_open: 'Gift - tap to open',
     call_pick_from_title: 'Call as which character?',
     call_pick_to_title: 'Call whom?',
@@ -1857,6 +1901,14 @@ var I18N = {
     incoming_call_sub: 'is calling you',
     btn_decline_call: 'Decline',
     btn_accept_call: 'Accept',
+    call_log_text: function (from, to) { return from + ' called ' + to; },
+    transfer_pick_from_title: 'Transfer as which character?',
+    transfer_pick_to_title: 'Transfer to whom?',
+    transfer_amount_label: 'Amount in dollars',
+    btn_send_transfer: 'Transfer',
+    toast_enter_amount: 'Enter a transfer amount',
+    toast_transfer_sent: function (name) { return 'Transfer sent: ' + name; },
+    transfer_log_text: function (from, to, amount) { return 'Transfer from ' + from + ' to ' + to + ': $' + amount; },
 
     category_title_default: 'Category',
 
@@ -3274,11 +3326,25 @@ function renderSmsMessage(m) {
   var photoHtml = m.photo_file_id
     ? '<div class="msg-photo-wrap"><img class="msg-photo" src="/api/tg-photo?file_id=' + encodeURIComponent(m.photo_file_id) + '"></div>'
     : '';
-  var textHtml = m.text ? ('<div>' + formatMessageText(m.text) + '</div>') : '';
+  // У звонка/перевода в SMS пара персонажей всегда фиксирована самим тредом
+  // (см. currentSmsThread) - кто из двух отправитель, видно по m.character_name,
+  // второе имя просто берём как "того из пары, кто не отправитель".
+  var otherName = currentSmsThread
+    ? (m.character_name === currentSmsThread.mine.name ? currentSmsThread.other.name : currentSmsThread.mine.name)
+    : '';
+  var bodyHtml = m.is_call
+    ? '<div class="call-log"><span class="ic">&#128222;</span><span>' + t('call_log_text')(escapeHtml(m.character_name || ''), escapeHtml(otherName)) + '</span></div>'
+    : (m.transfer_amount_cents != null)
+    ? '<div class="transfer-log"><span class="ic">&#128181;</span><span>' +
+        t('transfer_log_text')(escapeHtml(m.character_name || ''), escapeHtml(otherName), (m.transfer_amount_cents / 100).toFixed(2)) + '</span></div>'
+    : '';
+  var textHtml = (m.text || bodyHtml) ? ('<div>' + (bodyHtml || formatMessageText(m.text)) + '</div>') : '';
   div.innerHTML = replyHtml + photoHtml + textHtml +
     '<div class="msg-time">' + time + editedTag + tick + '</div>';
-  div.style.cursor = 'pointer';
-  div.onclick = function () { if (mine) startSmsEditMessage(m); else startSmsReply(m); };
+  if (!m.is_call && m.transfer_amount_cents == null) {
+    div.style.cursor = 'pointer';
+    div.onclick = function () { if (mine) startSmsEditMessage(m); else startSmsReply(m); };
+  }
   return div;
 }
 
@@ -3353,6 +3419,58 @@ function startSmsReply(m) {
 function cancelSmsReply() {
   smsReplyToId = null;
   document.getElementById('sms-reply-banner').classList.remove('show');
+}
+
+// ---------- меню "скрепки" в SMS: фото / звонок / перевод ----------
+// В отличие от чата локации, пара персонажей тут уже зафиксирована самим
+// тредом (currentSmsThread), поэтому для звонка не нужен пикер "от кого -
+// кому" - это просто одна кнопка, а для перевода нужна только сумма.
+function smsAttachMenuAction(kind) {
+  document.getElementById('sms-attach-menu').classList.remove('show');
+  if (kind === 'photo') document.getElementById('sms-photo-input').click();
+  else if (kind === 'call') sendSmsCall();
+  else if (kind === 'transfer') openSmsTransferPrompt();
+}
+
+function sendSmsCall() {
+  if (!currentSmsThread) return;
+  api('/api/sms-messages?thread_id=' + currentSmsThread.id, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ is_call: true })
+  }).then(function (data) {
+    smsLastMessageId = Math.max(smsLastMessageId, data.message.id);
+    var box = document.getElementById('sms-messages');
+    box.appendChild(renderSmsMessage(data.message));
+    box.scrollTop = box.scrollHeight;
+    showToast(t('toast_call_sent')(currentSmsThread.other.name));
+  }).catch(function (e) { showToast(e.message); });
+}
+
+function openSmsTransferPrompt() {
+  if (!currentSmsThread) return;
+  document.getElementById('sms-transfer-amount-input').value = '';
+  document.getElementById('sms-transfer-overlay').classList.add('active');
+}
+
+function closeSmsTransferPrompt() {
+  document.getElementById('sms-transfer-overlay').classList.remove('active');
+}
+
+function confirmSmsTransfer() {
+  var amount = Number(document.getElementById('sms-transfer-amount-input').value);
+  if (!currentSmsThread) return;
+  if (!amount || amount <= 0) return showToast(t('toast_enter_amount'));
+  api('/api/sms-messages?thread_id=' + currentSmsThread.id, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ transfer_amount: amount })
+  }).then(function (data) {
+    smsLastMessageId = Math.max(smsLastMessageId, data.message.id);
+    var box = document.getElementById('sms-messages');
+    box.appendChild(renderSmsMessage(data.message));
+    box.scrollTop = box.scrollHeight;
+    showToast(t('toast_transfer_sent')(currentSmsThread.other.name));
+    closeSmsTransferPrompt();
+  }).catch(function (e) { showToast(e.message); });
 }
 
 function onSmsPhotoPicked(file) {
@@ -3767,14 +3885,21 @@ function processDiceQueue() {
   });
 }
 
-// ---------- меню "скрепки": фото / кубик / подарок / звонок ----------
+// ---------- меню "скрепки": фото / кубик / подарок / звонок / перевод ----------
+// Два независимых меню (комната и SMS) используют один и тот же CSS-класс
+// .attach-menu-wrap, поэтому закрытие по клику вовне проходит по каждому,
+// а не берёт только первый попавшийся в DOM (document.querySelector).
 function toggleAttachMenu() {
   document.getElementById('attach-menu').classList.toggle('show');
 }
+function toggleSmsAttachMenu() {
+  document.getElementById('sms-attach-menu').classList.toggle('show');
+}
 document.addEventListener('click', function (e) {
-  var menu = document.getElementById('attach-menu');
-  var wrap = document.querySelector('.attach-menu-wrap');
-  if (menu && menu.classList.contains('show') && wrap && !wrap.contains(e.target)) menu.classList.remove('show');
+  document.querySelectorAll('.attach-menu.show').forEach(function (menu) {
+    var wrap = menu.closest('.attach-menu-wrap');
+    if (wrap && !wrap.contains(e.target)) menu.classList.remove('show');
+  });
 });
 
 function attachMenuAction(kind) {
@@ -3783,6 +3908,7 @@ function attachMenuAction(kind) {
   else if (kind === 'dice') sendDiceRoll();
   else if (kind === 'gift') document.getElementById('gift-photo-input').click();
   else if (kind === 'call') openCallPicker();
+  else if (kind === 'transfer') openTransferPicker();
 }
 
 function sendDiceRoll() {
@@ -3875,8 +4001,93 @@ function sendCall(fromCharacter, toCharacter) {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ character_id: fromCharacter.id, call_to_character_id: toCharacter.id })
   }).then(function (data) {
+    data.message.call_target_name = data.call_to_name || toCharacter.name;
     lastMessageId = Math.max(lastMessageId, data.message.id);
+    // Отправитель не увидит это же сообщение через обычный опрос - его
+    // after_id уже сдвинут выше только что созданной записи, поэтому
+    // добавляем постоянную запись о звонке в ленту сразу сами (получатель
+    // увидит её на следующем опросе как обычно, см. pollMessages).
+    var box = document.getElementById('messages');
+    box.appendChild(renderMessage(data.message));
+    box.scrollTop = box.scrollHeight;
     showToast(t('toast_call_sent')(data.call_to_name || toCharacter.name));
+  }).catch(function (e) { showToast(e.message); });
+}
+
+// ---------- перевод денег: тот же "от кого - кому", плюс сумма в долларах ----------
+var transferFromCharacter = null;
+var transferToCharacterPicked = null;
+
+function openTransferPicker() {
+  if (!currentClub) return;
+  transferFromCharacter = null;
+  transferToCharacterPicked = null;
+  document.getElementById('transfer-amount-step').style.display = 'none';
+  document.getElementById('transfer-picker-list').style.display = '';
+  api('/api/characters').then(function (data) {
+    renderTransferPickList(data.characters || [], t('transfer_pick_from_title'), function (ch) {
+      transferFromCharacter = ch;
+      api('/api/other-characters').then(function (data2) {
+        if (!data2.characters || !data2.characters.length) {
+          closeTransferPicker();
+          return showToast(t('toast_other_has_no_characters'));
+        }
+        renderTransferPickList(data2.characters, t('transfer_pick_to_title'), function (target) {
+          transferToCharacterPicked = target;
+          document.getElementById('transfer-picker-list').style.display = 'none';
+          document.getElementById('transfer-amount-step').style.display = 'block';
+          var input = document.getElementById('transfer-amount-input');
+          input.value = '';
+          input.focus();
+        });
+      }).catch(function (e) { closeTransferPicker(); showToast(e.message); });
+    });
+    document.getElementById('transfer-picker-overlay').classList.add('active');
+  }).catch(function (e) { showToast(e.message); });
+}
+
+function renderTransferPickList(list, title, onPick) {
+  document.getElementById('transfer-picker-title').textContent = title;
+  var container = document.getElementById('transfer-picker-list');
+  container.innerHTML = '';
+  list.forEach(function (ch) {
+    var card = document.createElement('div');
+    card.className = 'entry-row';
+    card.innerHTML = '<img class="avatar-thumb" src="/api/tg-photo?file_id=' + encodeURIComponent(ch.avatar_file_id) + '">' +
+      '<div class="entry-info"><div class="entry-name">' + escapeHtml(ch.name) + '</div></div>' +
+      '<span class="entry-arrow">&rarr;</span>';
+    card.onclick = function () { onPick(ch); };
+    container.appendChild(card);
+  });
+}
+
+function closeTransferPicker() {
+  document.getElementById('transfer-picker-overlay').classList.remove('active');
+  document.getElementById('transfer-amount-step').style.display = 'none';
+  document.getElementById('transfer-picker-list').style.display = '';
+  transferFromCharacter = null;
+  transferToCharacterPicked = null;
+}
+
+function confirmTransfer() {
+  var amount = Number(document.getElementById('transfer-amount-input').value);
+  if (!currentClub || !transferFromCharacter || !transferToCharacterPicked) return;
+  if (!amount || amount <= 0) return showToast(t('toast_enter_amount'));
+  api('/api/transfer?club_id=' + currentClub.id, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      character_id: transferFromCharacter.id,
+      transfer_to_character_id: transferToCharacterPicked.id,
+      amount: amount
+    })
+  }).then(function (data) {
+    data.message.transfer_target_name = data.transfer_target_name || transferToCharacterPicked.name;
+    lastMessageId = Math.max(lastMessageId, data.message.id);
+    var box = document.getElementById('messages');
+    box.appendChild(renderMessage(data.message));
+    box.scrollTop = box.scrollHeight;
+    showToast(t('toast_transfer_sent')(data.transfer_target_name || transferToCharacterPicked.name));
+    closeTransferPicker();
   }).catch(function (e) { showToast(e.message); });
 }
 
@@ -3953,6 +4164,13 @@ function renderMessage(m) {
   var bodyHtml = m.dice_value
     ? '<div class="dice-roll" data-value="' + m.dice_value + '"><span class="dice-face">' + diceFaceChar(m.dice_value) + '</span>' +
         '<span class="dice-caption">' + t('dice_rolled') + ' <b>' + m.dice_value + '</b></span></div>'
+    : m.call_to_character_id
+    ? '<div class="call-log"><span class="ic">&#128222;</span><span>' +
+        t('call_log_text')(escapeHtml(m.character_name || whoLabel), escapeHtml(m.call_target_name || '')) + '</span></div>'
+    : m.transfer_to_character_id
+    ? '<div class="transfer-log"><span class="ic">&#128181;</span><span>' +
+        t('transfer_log_text')(escapeHtml(m.character_name || whoLabel), escapeHtml(m.transfer_target_name || ''), (m.transfer_amount_cents / 100).toFixed(2)) +
+        '</span></div>'
     : m.is_attention
     ? '<div class="ooc-note">&#9888; ' + formatMessageText(m.text.slice(1, -1)) + '</div>'
     : formatMessageText(m.text);
@@ -3967,11 +4185,11 @@ function renderMessage(m) {
       (isBlurred ? revealHint : '') +
       '</div>';
   }
-  var textHtml = (m.text || m.dice_value) ? ('<div>' + bodyHtml + '</div>') : '';
+  var textHtml = (m.text || m.dice_value || m.call_to_character_id || m.transfer_to_character_id) ? ('<div>' + bodyHtml + '</div>') : '';
   div.innerHTML = '<div class="who">' + avatarHtml + escapeHtml(whoLabel) + genderBadge(m.character_gender) + '</div>' +
     photoHtml + textHtml +
     '<div class="msg-time">' + time + editedTag + tick + '</div>';
-  if (mine && !m.dice_value) {
+  if (mine && !m.dice_value && !m.call_to_character_id && !m.transfer_to_character_id) {
     div.style.cursor = 'pointer';
     div.onclick = function () { startEditMessage(m); };
   }
@@ -4053,10 +4271,11 @@ function pollMessages() {
           if (oldestMessageId === null || m.id < oldestMessageId) oldestMessageId = m.id;
           if (m.edited_at && m.edited_at > lastEditCheck) lastEditCheck = m.edited_at;
           if (m.dice_value && !isInitialLoad) { enqueueDiceReveal(m, box); return; }
-          // Звонок - чисто визуальное уведомление (см. showIncomingCallOverlay),
-          // в саму ленту сообщений пузырём не добавляется вообще, ни сейчас,
-          // ни при следующем входе в комнату.
-          if (m.call_to_character_id) { if (!isInitialLoad && m.is_incoming_call_for_me) showIncomingCallOverlay(m); return; }
+          // Звонок - помимо всплывающего оповещения (только у того, кому
+          // звонят, и только если он уже в этой комнате), теперь ещё и
+          // остаётся постоянной записью в ленте у обоих - как и звонящий
+          // увидит её сразу (см. sendCall), так и собеседник через опрос.
+          if (m.call_to_character_id && !isInitialLoad && m.is_incoming_call_for_me) showIncomingCallOverlay(m);
           var existing = box.querySelector('[data-id="' + m.id + '"]');
           if (existing) existing.replaceWith(renderMessage(m)); else box.appendChild(renderMessage(m));
         });

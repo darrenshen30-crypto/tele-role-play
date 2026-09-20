@@ -81,6 +81,7 @@ export async function onRequestGet(context) {
 
   const { results } = await env.DB.prepare(
     "SELECT cm.id, cm.sender_user_id, cm.character_name, cm.character_avatar_file_id, cm.text, cm.created_at, cm.edited_at, cm.reply_to_id, cm.photo_file_id, " +
+      "cm.is_call, cm.transfer_amount_cents, " +
       "rm.text AS reply_text, rm.character_name AS reply_character_name " +
       "FROM sms_messages cm LEFT JOIN sms_messages rm ON rm.id = cm.reply_to_id " +
       "WHERE cm.thread_id = ? AND (cm.id > ? OR (cm.edited_at IS NOT NULL AND cm.edited_at > ?)) ORDER BY cm.id ASC LIMIT 200"
@@ -91,6 +92,7 @@ export async function onRequestGet(context) {
       id: row.id, sender_user_id: row.sender_user_id, character_name: row.character_name,
       character_avatar_file_id: row.character_avatar_file_id, text: row.text,
       created_at: row.created_at, edited_at: row.edited_at, photo_file_id: row.photo_file_id,
+      is_call: !!row.is_call, transfer_amount_cents: row.transfer_amount_cents,
     };
     if (row.reply_to_id) {
       message.reply = { id: row.reply_to_id, text: row.reply_text, character_name: row.reply_character_name };
@@ -119,8 +121,17 @@ export async function onRequestPost(context) {
   const body = await context.request.json();
   const text = (body.text || "").trim();
   const photoFileId = body.photo_file_id || null;
-  if (!text && !photoFileId) return json({ error: "Пустое сообщение." }, 400);
+  const isCall = !!body.is_call;
+  // Перевод - как и звонок, персонажи пары уже фиксированы самим тредом
+  // (см. комментарий в шапке файла), поэтому, в отличие от чата локации,
+  // выбирать "от кого - кому" тут не нужно, только сумму.
+  const transferAmount = body.transfer_amount != null ? Number(body.transfer_amount) : null;
+  const isTransfer = transferAmount != null;
+  if (isTransfer && (!isFinite(transferAmount) || transferAmount <= 0)) return json({ error: "Укажите сумму перевода." }, 400);
+  if (isTransfer && transferAmount > 1000000) return json({ error: "Слишком большая сумма." }, 400);
+  if (!text && !photoFileId && !isCall && !isTransfer) return json({ error: "Пустое сообщение." }, 400);
   if (text.length > 4000) return json({ error: "Слишком длинное сообщение." }, 400);
+  const transferAmountCents = isTransfer ? Math.round(transferAmount * 100) : null;
 
   let replyTo = null;
   if (body.reply_to_id) {
@@ -133,14 +144,18 @@ export async function onRequestPost(context) {
   let message = null;
   try {
     message = await env.DB.prepare(
-      "INSERT INTO sms_messages (thread_id, sender_user_id, character_id, character_name, character_avatar_file_id, text, reply_to_id, photo_file_id) " +
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?) " +
-        "RETURNING id, sender_user_id, character_name, character_avatar_file_id, text, created_at, edited_at, reply_to_id, photo_file_id"
-    ).bind(threadId, String(userId), access.mine.id, access.mine.name, access.mine.avatar_file_id, text, replyTo ? replyTo.id : null, photoFileId).first();
+      "INSERT INTO sms_messages (thread_id, sender_user_id, character_id, character_name, character_avatar_file_id, text, reply_to_id, photo_file_id, is_call, transfer_amount_cents) " +
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) " +
+        "RETURNING id, sender_user_id, character_name, character_avatar_file_id, text, created_at, edited_at, reply_to_id, photo_file_id, is_call, transfer_amount_cents"
+    ).bind(
+      threadId, String(userId), access.mine.id, access.mine.name, access.mine.avatar_file_id, text,
+      replyTo ? replyTo.id : null, photoFileId, isCall ? 1 : 0, transferAmountCents
+    ).first();
   } catch (e) {
     console.log("Ошибка отправки SMS:", e.message);
     return json({ error: "Не удалось отправить сообщение." }, 500);
   }
+  message.is_call = !!message.is_call;
   if (replyTo) message.reply = { id: replyTo.id, text: replyTo.text, character_name: replyTo.character_name };
 
   context.waitUntil(notifyRecipient(env, threadId, access.other.owner_id, message.id));
