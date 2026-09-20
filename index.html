@@ -1693,7 +1693,7 @@ var I18N = {
     incoming_call_sub: 'звонит вам',
     btn_decline_call: 'Отклонить',
     btn_accept_call: 'Принять',
-    call_log_text: function (from, to) { return from + ' позвонил(а) ' + to; },
+    call_log_text: function (from, to) { return from + ' звонит ' + to; },
     transfer_pick_from_title: 'От чьего лица перевести?',
     transfer_pick_to_title: 'Кому перевести?',
     transfer_amount_label: 'Сумма в долларах',
@@ -1901,7 +1901,7 @@ var I18N = {
     incoming_call_sub: 'is calling you',
     btn_decline_call: 'Decline',
     btn_accept_call: 'Accept',
-    call_log_text: function (from, to) { return from + ' called ' + to; },
+    call_log_text: function (from, to) { return from + ' is calling ' + to; },
     transfer_pick_from_title: 'Transfer as which character?',
     transfer_pick_to_title: 'Transfer to whom?',
     transfer_amount_label: 'Amount in dollars',
@@ -3443,6 +3443,7 @@ function sendSmsCall() {
     box.appendChild(renderSmsMessage(data.message));
     box.scrollTop = box.scrollHeight;
     showToast(t('toast_call_sent')(currentSmsThread.other.name));
+    ringTone(); // звук звонка слышит не только собеседник, но и сам звонящий
   }).catch(function (e) { showToast(e.message); });
 }
 
@@ -4011,6 +4012,7 @@ function sendCall(fromCharacter, toCharacter) {
     box.appendChild(renderMessage(data.message));
     box.scrollTop = box.scrollHeight;
     showToast(t('toast_call_sent')(data.call_to_name || toCharacter.name));
+    ringTone(); // звук звонка слышит не только собеседник, но и сам звонящий
   }).catch(function (e) { showToast(e.message); });
 }
 
