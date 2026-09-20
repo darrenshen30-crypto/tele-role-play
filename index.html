@@ -759,6 +759,13 @@
     padding: 34px 24px 28px; text-align: center; color: #fff;
     box-shadow: 0 20px 50px rgba(0,0,0,.4);
   }
+  /* Оповещение "перевод выполнен" - тот же оверлей, но золотистый (деньги),
+     а не зелёный (звонок), чтобы их нельзя было перепутать взглядом. */
+  .incoming-call-card.transfer-card {
+    background: linear-gradient(180deg, #d4a72c 0%, #8f6a12 100%);
+    cursor: pointer;
+  }
+  .transfer-card .incoming-call-sub:last-child { opacity: .7; margin-bottom: 0; margin-top: -14px; }
   .incoming-call-label { font-size: 13px; letter-spacing: .08em; text-transform: uppercase; opacity: .85; margin-bottom: 18px; }
   .incoming-call-avatar {
     width: 96px; height: 96px; border-radius: 50%; object-fit: cover; margin: 0 auto 16px;
@@ -1582,6 +1589,16 @@
   </div>
 </div>
 
+<div id="incoming-transfer-overlay" class="call-overlay" onclick="closeIncomingTransferOverlay()">
+  <div class="incoming-call-card transfer-card">
+    <div class="incoming-call-label" data-i18n="transfer_done_label">Перевод выполнен</div>
+    <img id="incoming-transfer-avatar" class="incoming-call-avatar" />
+    <div class="incoming-call-name" id="incoming-transfer-name"></div>
+    <div class="incoming-call-sub" id="incoming-transfer-sub"></div>
+    <div class="incoming-call-sub" data-i18n="tap_to_dismiss">Нажмите, чтобы закрыть</div>
+  </div>
+</div>
+
 <script>
 var tg = window.Telegram && window.Telegram.WebApp;
 
@@ -1704,6 +1721,9 @@ var I18N = {
     toast_enter_amount: 'Укажите сумму перевода',
     toast_transfer_sent: function (name) { return 'Перевод отправлен: ' + name; },
     transfer_log_text: function (from, to, amount) { return 'Перевод средств от ' + from + ' к ' + to + ': $' + amount; },
+    transfer_done_label: 'Перевод выполнен',
+    transfer_received_sub: function (amount) { return 'Перевёл(а) вам $' + amount; },
+    tap_to_dismiss: 'Нажмите, чтобы закрыть',
 
     category_title_default: 'Категория',
 
@@ -1914,6 +1934,9 @@ var I18N = {
     toast_enter_amount: 'Enter a transfer amount',
     toast_transfer_sent: function (name) { return 'Transfer sent: ' + name; },
     transfer_log_text: function (from, to, amount) { return 'Transfer from ' + from + ' to ' + to + ': $' + amount; },
+    transfer_done_label: 'Transfer completed',
+    transfer_received_sub: function (amount) { return 'Sent you $' + amount; },
+    tap_to_dismiss: 'Tap to dismiss',
 
     category_title_default: 'Category',
 
@@ -4208,6 +4231,22 @@ function respondToCall(accepted) {
   }).catch(function () {});
 }
 
+// ---------- уведомление "перевод выполнен" - как звонок, но без принять/
+// отклонить: звук как у SMS (не рингтон) и закрывается по любому тапу,
+// а постоянная запись в ленте (см. renderMessage) остаётся насовсем. ----------
+function showIncomingTransferOverlay(m) {
+  document.getElementById('incoming-transfer-avatar').src = m.character_avatar_file_id
+    ? '/api/tg-photo?file_id=' + encodeURIComponent(m.character_avatar_file_id) : '';
+  document.getElementById('incoming-transfer-name').textContent = m.character_name || m.user_name || t('guest');
+  document.getElementById('incoming-transfer-sub').textContent = t('transfer_received_sub')((m.transfer_amount_cents / 100).toFixed(2));
+  document.getElementById('incoming-transfer-overlay').classList.add('active');
+  playNotifySound();
+}
+
+function closeIncomingTransferOverlay() {
+  document.getElementById('incoming-transfer-overlay').classList.remove('active');
+}
+
 function tickHtml(messageId) {
   var read = messageId <= otherReadId;
   return '<span class="tick' + (read ? ' read' : '') + '">' + (read ? '✓✓' : '✓') + '</span>';
@@ -4340,6 +4379,10 @@ function pollMessages() {
           // остаётся постоянной записью в ленте у обоих - как и звонящий
           // увидит её сразу (см. sendCall), так и собеседник через опрос.
           if (m.call_to_character_id && !isInitialLoad && m.is_incoming_call_for_me) showIncomingCallOverlay(m);
+          // Перевод - тот же принцип: всплывающее оповещение только у
+          // получателя и только если он уже в комнате, плюс постоянная
+          // запись в ленте у обоих (см. transfer-log в renderMessage).
+          if (m.transfer_to_character_id && !isInitialLoad && m.is_incoming_transfer_for_me) showIncomingTransferOverlay(m);
           var existing = box.querySelector('[data-id="' + m.id + '"]');
           if (existing) existing.replaceWith(renderMessage(m)); else box.appendChild(renderMessage(m));
         });

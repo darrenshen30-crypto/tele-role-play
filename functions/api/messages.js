@@ -74,6 +74,7 @@ const MESSAGE_COLUMNS =
   "cm.character_avatar_file_id, cm.is_attention, cm.photo_file_id, cm.photo_blurred, cm.dice_value, cm.gift_key, " +
   "cm.call_to_character_id, callee.owner_id AS call_target_owner_id, callee.name AS call_target_name, " +
   "cm.transfer_to_character_id, cm.transfer_amount_cents, transfer_target.name AS transfer_target_name, " +
+  "transfer_target.owner_id AS transfer_target_owner_id, " +
   "ch.gender AS character_gender, " +
   "CASE WHEN cm.photo_blurred = 0 OR cm.user_id = ? OR cpr.user_id IS NOT NULL THEN 1 ELSE 0 END AS photo_revealed " +
   "FROM club_messages cm LEFT JOIN characters ch ON ch.id = cm.character_id " +
@@ -81,14 +82,16 @@ const MESSAGE_COLUMNS =
   "LEFT JOIN characters transfer_target ON transfer_target.id = cm.transfer_to_character_id " +
   "LEFT JOIN club_photo_reveals cpr ON cpr.message_id = cm.id AND cpr.user_id = ?";
 
-// Отметить, звонок ли это лично текущему пользователю (сравнение владельца
-// персонажа-адресата с userId) - без этого клиент не мог бы отличить "звонок
-// мне" от "звонок ещё кому-то в этой же комнате" (в будущем, если участников
-// станет больше двух).
+// Отметить, звонок/перевод ли это лично текущему пользователю (сравнение
+// владельца персонажа-адресата с userId) - без этого клиент не мог бы
+// отличить "мне" от "ещё кому-то в этой же комнате" (в будущем, если
+// участников станет больше двух).
 function markIncomingCalls(rows, userId) {
   return rows.map(function (row) {
     row.is_incoming_call_for_me = !!(row.call_to_character_id && String(row.call_target_owner_id) === String(userId));
+    row.is_incoming_transfer_for_me = !!(row.transfer_to_character_id && String(row.transfer_target_owner_id) === String(userId));
     delete row.call_target_owner_id;
+    delete row.transfer_target_owner_id;
     return row;
   });
 }
