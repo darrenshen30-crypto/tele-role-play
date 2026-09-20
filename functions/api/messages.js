@@ -114,6 +114,7 @@ export async function onRequestGet(context) {
 
   let results;
   let hasMore = false;
+  let initialEditBaseline = null;
 
   if (beforeId) {
     // Пролистывание вверх - следующая по возрасту пачка перед тем, что уже
@@ -143,6 +144,14 @@ export async function onRequestGet(context) {
     const rows = r.results || [];
     hasMore = rows.length >= limit; // могли обрезать более старую историю
     results = rows.reverse();
+    // Хвост показывает не всю историю - без этого следующий обычный опрос
+    // сравнивал бы edited_at с '' и решил бы, что ЛЮБОЕ когда-либо
+    // отредактированное сообщение комнаты (хоть недельной давности) "новое",
+    // и подставил бы его в конец ленты поверх только что показанного хвоста.
+    const editRow = await env.DB.prepare(
+      "SELECT MAX(edited_at) AS v FROM club_messages WHERE club_id = ?"
+    ).bind(clubId).first();
+    initialEditBaseline = (editRow && editRow.v) || "";
   } else {
     // Обычный опрос - только новое и отредактированное с прошлого раза,
     // как и раньше (дёшево независимо от общей длины истории комнаты).
@@ -173,6 +182,7 @@ export async function onRequestGet(context) {
     has_more: hasMore,
     other_read_id: (otherRead && otherRead.v != null) ? otherRead.v : 0,
     attention_id: (attention && attention.v != null) ? attention.v : 0,
+    initial_edit_baseline: isInitial ? initialEditBaseline : undefined,
   });
 }
 

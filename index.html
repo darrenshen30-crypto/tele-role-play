@@ -4026,6 +4026,11 @@ function pollMessages() {
       otherReadId = data.other_read_id || 0;
       updateAttentionBanner(data.attention_id);
       if (isInitialLoad) hasMoreOlderMessages = !!data.has_more;
+      // Хвост при входе показывает не всю историю комнаты - без явного
+      // "текущего" порога правок следующий обычный опрос принял бы за новые
+      // все когда-либо отредактированные сообщения всей комнаты (см. baseline
+      // на сервере) и подставил бы их в конец ленты поверх свежего хвоста.
+      if (isInitialLoad && data.initial_edit_baseline) lastEditCheck = data.initial_edit_baseline;
       if (data.messages.length) {
         var box = document.getElementById('messages');
         var wasAtBottom = isInitialLoad || forced || (box.scrollHeight - box.scrollTop - box.clientHeight < 60);
