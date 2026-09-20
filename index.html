@@ -1528,6 +1528,7 @@ var I18N = {
     section_more: 'Ещё',
     rooms_count: function (n) { return n + ' ' + ruPluralWord(n, 'комната', 'комнаты', 'комнат'); },
     sms_unread_count: function (n) { return n ? (n + ' ' + ruPluralWord(n, 'непрочитанное', 'непрочитанных', 'непрочитанных')) : 'нет непрочитанных'; },
+    toast_new_sms: function (name) { return 'Новое SMS от ' + name; },
     troupe_count: function (n) { return n + ' ' + ruPluralWord(n, 'персонаж', 'персонажа', 'персонажей'); },
     create_card_title: 'Создать локацию',
     create_card_sub: 'новая история',
@@ -1714,6 +1715,7 @@ var I18N = {
     section_more: 'More',
     rooms_count: function (n) { return n + ' ' + (n === 1 ? 'room' : 'rooms'); },
     sms_unread_count: function (n) { return n ? (n + ' unread') : 'no unread'; },
+    toast_new_sms: function (name) { return 'New SMS from ' + name; },
     troupe_count: function (n) { return n + (n === 1 ? ' character' : ' characters'); },
     create_card_title: 'Create location',
     create_card_sub: 'new story',
@@ -4200,10 +4202,68 @@ function filterHomeCards() {
   });
 }
 
+// ---------- оповещение о новых SMS - тостом и звуком, в любом экране ----------
+// В отличие от опроса самой переписки (pollSmsMessages), это лёгкий и всегда
+// включённый опрос списка переписок (несколько строк, не растёт с историей),
+// поэтому не остановлен на входе в комнату/чат, как updateClubsPolling.
+var smsNotifySeenIds = {}; // thread_id -> id последнего уже показанного сообщения
+var smsNotifyBaseline = true; // первый опрос после запуска - только запоминаем, не оповещаем
+var notifyAudioCtx = null;
+
+function unlockNotifySound() {
+  if (notifyAudioCtx) return;
+  try {
+    var Ctx = window.AudioContext || window.webkitAudioContext;
+    if (Ctx) notifyAudioCtx = new Ctx();
+  } catch (e) {}
+}
+document.addEventListener('click', unlockNotifySound, { once: true });
+document.addEventListener('touchstart', unlockNotifySound, { once: true });
+
+// Короткий двухтонный "дзынь" в духе уведомлений iOS - без аудиофайла,
+// синтезируется на лету через Web Audio API.
+function playNotifySound() {
+  if (!notifyAudioCtx) return;
+  try {
+    if (notifyAudioCtx.state === 'suspended') notifyAudioCtx.resume();
+    var t0 = notifyAudioCtx.currentTime;
+    [[1046.5, 0], [1568, 0.12]].forEach(function (pair) {
+      var osc = notifyAudioCtx.createOscillator();
+      var gain = notifyAudioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = pair[0];
+      gain.gain.setValueAtTime(0.0001, t0 + pair[1]);
+      gain.gain.exponentialRampToValueAtTime(0.2, t0 + pair[1] + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + pair[1] + 0.28);
+      osc.connect(gain);
+      gain.connect(notifyAudioCtx.destination);
+      osc.start(t0 + pair[1]);
+      osc.stop(t0 + pair[1] + 0.3);
+    });
+  } catch (e) {}
+}
+
+function pollSmsNotifications() {
+  api('/api/sms-threads').then(function (data) {
+    (data.threads || []).forEach(function (thread) {
+      var lastSeen = smsNotifySeenIds[thread.id] || 0;
+      var isOpenNow = currentScreenName === 'smsChat' && currentSmsThread && String(currentSmsThread.id) === String(thread.id);
+      if (!smsNotifyBaseline && thread.unread && thread.last_message_id && thread.last_message_id > lastSeen && !isOpenNow) {
+        showToast(t('toast_new_sms')(thread.last_message_character || thread.other_character.name));
+        playNotifySound();
+      }
+      if (thread.last_message_id) smsNotifySeenIds[thread.id] = Math.max(lastSeen, thread.last_message_id);
+    });
+    smsNotifyBaseline = false;
+  }).catch(function () {});
+}
+setInterval(pollSmsNotifications, 8000);
+
 function init() {
   updateGreeting();
   updateClock();
   setInterval(updateClock, 30000);
+  pollSmsNotifications();
   api('/api/profile').then(function (data) {
     myProfile = data.profile;
     updateProfileCaption();

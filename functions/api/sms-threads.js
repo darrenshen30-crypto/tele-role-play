@@ -47,6 +47,7 @@ export async function onRequestGet(context) {
       row.last_message_id > row.last_read_message_id;
     return {
       id: row.id, my_character: mine, other_character: other, unread: unread,
+      last_message_id: row.last_message_id || null,
       last_message_text: row.last_message_text || null,
       last_message_character: row.last_message_character || null,
     };
