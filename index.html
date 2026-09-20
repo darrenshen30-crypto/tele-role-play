@@ -4241,19 +4241,17 @@ function respondToCall(accepted) {
   if (!accepted) declineTone();
   var call = pendingIncomingCall;
   pendingIncomingCall = null;
-  // Оповещение "звонок принят/отклонён" - обычное сообщение в чате от лица
-  // того персонажа, которому звонили (call.call_to_character_id), а не
-  // текущего activeCharacter - отвечает именно адресат звонка, а не тот,
-  // кто сейчас выбран для обычной переписки.
   if (!call || !currentClub) return;
-  api('/api/messages?club_id=' + currentClub.id, {
+  // Обновляем ту же запись о звонке (call_response), а не шлём отдельное
+  // сообщение - и звонящий, и ответивший видят исход прямо на исходном
+  // "Х звонит Y" через обычный опрос (см. renderMessage/pollMessages).
+  api('/api/call-respond?club_id=' + currentClub.id, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ character_id: call.call_to_character_id, text: accepted ? t('call_accepted_text') : t('call_declined_text') })
+    body: JSON.stringify({ message_id: call.id, accepted: accepted })
   }).then(function (data) {
-    lastMessageId = Math.max(lastMessageId, data.message.id);
-    var box = document.getElementById('messages');
-    box.appendChild(renderMessage(data.message));
-    box.scrollTop = box.scrollHeight;
+    var updated = Object.assign({}, call, { call_response: data.message.call_response, edited_at: data.message.edited_at });
+    var existing = document.querySelector('#messages [data-id="' + call.id + '"]');
+    if (existing) existing.replaceWith(renderMessage(updated));
   }).catch(function () {});
 }
 
@@ -4284,18 +4282,24 @@ function renderMessage(m) {
   div.className = 'msg ' + (mine ? 'mine' : 'theirs');
   div.dataset.id = m.id;
   var time = parseDbTime(m.created_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
-  var editedTag = m.edited_at ? ' <span class="edited-tag">' + t('edited_tag') + '</span>' : '';
+  // Правка звонка (см. call-respond.js) двигает edited_at, чтобы разнести
+  // исход опросом до обоих участников - но это не редактирование текста,
+  // поэтому тег "(изменено)" тут неуместен.
+  var editedTag = (m.edited_at && !m.call_to_character_id) ? ' <span class="edited-tag">' + t('edited_tag') + '</span>' : '';
   var tick = mine ? ' ' + tickHtml(m.id) : '';
   var avatarHtml = m.character_avatar_file_id
     ? '<img class="msg-avatar" src="/api/tg-photo?file_id=' + encodeURIComponent(m.character_avatar_file_id) + '">'
     : '';
   var whoLabel = m.character_name || m.user_name || t('guest');
+  var callStatusHtml = m.call_response === 'accepted' ? ' — ' + t('call_accepted_text')
+    : m.call_response === 'declined' ? ' — ' + t('call_declined_text')
+    : '';
   var bodyHtml = m.dice_value
     ? '<div class="dice-roll" data-value="' + m.dice_value + '"><span class="dice-face">' + diceFaceChar(m.dice_value) + '</span>' +
         '<span class="dice-caption">' + t('dice_rolled') + ' <b>' + m.dice_value + '</b></span></div>'
     : m.call_to_character_id
     ? '<div class="call-log"><span class="ic">&#128222;</span><span>' +
-        t('call_log_text')(escapeHtml(m.character_name || whoLabel), escapeHtml(m.call_target_name || '')) + '</span></div>'
+        t('call_log_text')(escapeHtml(m.character_name || whoLabel), escapeHtml(m.call_target_name || '')) + callStatusHtml + '</span></div>'
     : m.transfer_to_character_id
     ? '<div class="transfer-log"><span class="ic">&#128181;</span><span>' +
         t('transfer_log_text')(escapeHtml(m.character_name || whoLabel), escapeHtml(m.transfer_target_name || ''), (m.transfer_amount_cents / 100).toFixed(2)) +
@@ -4409,6 +4413,14 @@ function pollMessages() {
           // получателя и только если он уже в комнате, плюс постоянная
           // запись в ленте у обоих (см. transfer-log в renderMessage).
           if (m.transfer_to_character_id && !isInitialLoad && m.is_incoming_transfer_for_me) showIncomingTransferOverlay(m);
+          // Звонящий не видит всплывающее окно с кнопками (оно только у
+          // адресата), но услышать исход "отклонили" тоже должен - через
+          // тот же опрос, по факту смены call_response на его собственном
+          // звонке (m.user_id - как раз звонящий, см. call.js).
+          if (m.call_to_character_id && !isInitialLoad && m.call_response === 'declined' &&
+              tg && tg.initDataUnsafe && tg.initDataUnsafe.user && String(tg.initDataUnsafe.user.id) === String(m.user_id)) {
+            declineTone();
+          }
           var existing = box.querySelector('[data-id="' + m.id + '"]');
           if (existing) existing.replaceWith(renderMessage(m)); else box.appendChild(renderMessage(m));
         });

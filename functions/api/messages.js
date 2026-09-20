@@ -72,7 +72,7 @@ async function notifyRecipients(env, clubId, senderId, messageId) {
 const MESSAGE_COLUMNS =
   "cm.id, cm.user_id, cm.user_name, cm.text, cm.created_at, cm.edited_at, cm.character_id, cm.character_name, " +
   "cm.character_avatar_file_id, cm.is_attention, cm.photo_file_id, cm.photo_blurred, cm.dice_value, cm.gift_key, " +
-  "cm.call_to_character_id, callee.owner_id AS call_target_owner_id, callee.name AS call_target_name, " +
+  "cm.call_to_character_id, callee.owner_id AS call_target_owner_id, callee.name AS call_target_name, cm.call_response, " +
   "cm.transfer_to_character_id, cm.transfer_amount_cents, transfer_target.name AS transfer_target_name, " +
   "transfer_target.owner_id AS transfer_target_owner_id, " +
   "ch.gender AS character_gender, " +
