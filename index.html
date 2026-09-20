@@ -712,6 +712,66 @@
     background: radial-gradient(ellipse at center, rgba(0,0,0,.35) 0%, rgba(0,0,0,0) 72%);
   }
 
+  /* ---- меню "скрепки" (фото/кубик/подарок/звонок) в чате локации ---- */
+  .attach-menu-wrap { position: relative; flex: none; }
+  .attach-menu {
+    position: absolute; left: 0; bottom: 46px; z-index: 40;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.22); padding: 6px; min-width: 210px;
+    display: none; flex-direction: column;
+  }
+  .attach-menu.show { display: flex; }
+  .attach-menu button {
+    display: flex; align-items: center; gap: 10px; background: none; border: none; text-align: left;
+    padding: 10px 12px; border-radius: 10px; font-size: var(--lp-text-body); color: var(--ink);
+    cursor: pointer; font-family: inherit;
+  }
+  .attach-menu button .ic { font-size: 18px; flex: none; }
+  .attach-menu button:hover, .attach-menu button:active { background: var(--lp-tile-h); }
+
+  /* ---- общий полноэкранный оверлей для выбора и уведомления о звонке ---- */
+  .call-overlay {
+    position: fixed; inset: 0; z-index: 9999;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(0,0,0,0.6);
+    opacity: 0; pointer-events: none;
+    transition: opacity .2s ease;
+    padding: 20px;
+  }
+  .call-overlay.active { opacity: 1; pointer-events: auto; }
+  .call-picker-sheet {
+    width: 100%; max-width: 380px; max-height: 80vh; overflow-y: auto;
+    background: var(--panel); border-radius: var(--lp-radius-tile); padding: 18px;
+  }
+  .call-picker-sheet .modal-title { font-family: var(--lp-font-display); font-size: 19px; color: var(--ink); margin-bottom: 12px; }
+  .call-picker-sheet .entry-row { margin-bottom: 8px; }
+
+  /* ---- уведомление "входящий звонок" ---- */
+  .incoming-call-card {
+    width: 100%; max-width: 320px; border-radius: 28px; overflow: hidden;
+    background: linear-gradient(180deg, #2f9e63 0%, #1d6b45 100%);
+    padding: 34px 24px 28px; text-align: center; color: #fff;
+    box-shadow: 0 20px 50px rgba(0,0,0,.4);
+  }
+  .incoming-call-label { font-size: 13px; letter-spacing: .08em; text-transform: uppercase; opacity: .85; margin-bottom: 18px; }
+  .incoming-call-avatar {
+    width: 96px; height: 96px; border-radius: 50%; object-fit: cover; margin: 0 auto 16px;
+    display: block; background: rgba(255,255,255,.25); border: 3px solid rgba(255,255,255,.4);
+  }
+  .incoming-call-name { font-family: var(--lp-font-display); font-size: 22px; margin-bottom: 4px; }
+  .incoming-call-sub { font-size: 13px; opacity: .85; margin-bottom: 30px; }
+  .incoming-call-actions { display: flex; justify-content: space-between; padding: 0 10px; }
+  .incoming-call-btn {
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    background: none; border: none; color: #fff; font-size: 12px; cursor: pointer; font-family: inherit;
+  }
+  .incoming-call-btn .circle {
+    width: 56px; height: 56px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 24px; color: #fff;
+  }
+  .incoming-call-btn.decline .circle { background: #d64545; transform: rotate(135deg); }
+  .incoming-call-btn.accept .circle { background: #3fb356; }
+
   .attention-banner {
     position: relative; z-index: 2;
     display: none;
@@ -1387,10 +1447,17 @@
       <button type="button" class="photo-attach-remove" onclick="removeAttachedPhoto()">&times;</button>
     </div>
     <div class="chat-input-row">
-      <label class="icon-btn attach-btn">
-        &#128206;
+      <div class="attach-menu-wrap">
+        <button type="button" class="icon-btn attach-btn" onclick="toggleAttachMenu()">&#9776;</button>
+        <div class="attach-menu" id="attach-menu">
+          <button type="button" onclick="attachMenuAction('photo')"><span class="ic">&#128206;</span><span data-i18n="attach_photo">Фото</span></button>
+          <button type="button" onclick="attachMenuAction('dice')"><span class="ic">&#127922;</span><span data-i18n="attach_dice">Бросить кубик</span></button>
+          <button type="button" onclick="attachMenuAction('gift')"><span class="ic">&#127873;</span><span data-i18n="attach_gift">Отправить подарок</span></button>
+          <button type="button" onclick="attachMenuAction('call')"><span class="ic">&#128222;</span><span data-i18n="attach_call">Позвонить</span></button>
+        </div>
         <input type="file" id="msg-photo-input" accept="image/*" style="display:none;" onchange="onMessagePhotoPicked(this.files[0])" />
-      </label>
+        <input type="file" id="gift-photo-input" accept="image/*" style="display:none;" onchange="onGiftPhotoPicked(this.files[0])" />
+      </div>
       <textarea id="msg-input" rows="1" data-i18n-ph="message_placeholder" placeholder="Сообщение..." maxlength="4000"></textarea>
       <button class="send-btn" onclick="sendMessage()">&#10148;</button>
     </div>
@@ -1444,6 +1511,31 @@
       </div>
     </div>
     <div class="dice-shadow"></div>
+  </div>
+</div>
+
+<div id="call-picker-overlay" class="call-overlay">
+  <div class="call-picker-sheet">
+    <div class="modal-title" id="call-picker-title"></div>
+    <div id="call-picker-list"></div>
+    <button type="button" class="secondary" onclick="closeCallPicker()" data-i18n="cancel">Отмена</button>
+  </div>
+</div>
+
+<div id="incoming-call-overlay" class="call-overlay">
+  <div class="incoming-call-card">
+    <div class="incoming-call-label" data-i18n="incoming_call_label">Входящий звонок</div>
+    <img id="incoming-call-avatar" class="incoming-call-avatar" />
+    <div class="incoming-call-name" id="incoming-call-name"></div>
+    <div class="incoming-call-sub" id="incoming-call-sub"></div>
+    <div class="incoming-call-actions">
+      <button type="button" class="incoming-call-btn decline" onclick="respondToCall(false)">
+        <span class="circle">&#9742;</span><span data-i18n="btn_decline_call">Отклонить</span>
+      </button>
+      <button type="button" class="incoming-call-btn accept" onclick="respondToCall(true)">
+        <span class="circle">&#9742;</span><span data-i18n="btn_accept_call">Принять</span>
+      </button>
+    </div>
   </div>
 </div>
 
@@ -1546,6 +1638,18 @@ var I18N = {
     cmd_italic: 'Курсив.',
     cmd_attention: 'Пометка «внимание» - собеседник увидит баннер, что ответ может повлиять на реакцию персонажа.',
     cmd_dice: 'Бросок шестигранного кубика от лица выбранного персонажа. Видно всем в локации. Только в локациях, не в SMS и Привате.',
+    attach_photo: 'Фото',
+    attach_dice: 'Бросить кубик',
+    attach_gift: 'Отправить подарок',
+    attach_call: 'Позвонить',
+    gift_tap_to_open: 'Подарок - нажмите, чтобы открыть',
+    call_pick_from_title: 'От чьего лица звонить?',
+    call_pick_to_title: 'Кому позвонить?',
+    toast_call_sent: function (name) { return 'Звонок отправлен: ' + name; },
+    incoming_call_label: 'Входящий звонок',
+    incoming_call_sub: 'звонит вам',
+    btn_decline_call: 'Отклонить',
+    btn_accept_call: 'Принять',
 
     category_title_default: 'Категория',
 
@@ -1733,6 +1837,18 @@ var I18N = {
     cmd_italic: 'Italic text.',
     cmd_attention: 'An "attention" note - the other person sees a banner that the reply may affect their character\'s reaction.',
     cmd_dice: 'Roll a six-sided die as your selected character. Visible to everyone in the location. Locations only, not SMS or DMs.',
+    attach_photo: 'Photo',
+    attach_dice: 'Roll a die',
+    attach_gift: 'Send a gift',
+    attach_call: 'Call',
+    gift_tap_to_open: 'Gift - tap to open',
+    call_pick_from_title: 'Call as which character?',
+    call_pick_to_title: 'Call whom?',
+    toast_call_sent: function (name) { return 'Call sent: ' + name; },
+    incoming_call_label: 'Incoming call',
+    incoming_call_sub: 'is calling you',
+    btn_decline_call: 'Decline',
+    btn_accept_call: 'Accept',
 
     category_title_default: 'Category',
 
@@ -3588,6 +3704,7 @@ function diceFaceChar(value) {
   return String.fromCodePoint(0x2680 + (value - 1));
 }
 
+
 // ---- анимированный 3D-кубик поверх чата (/dice) ----
 // Грани куба зафиксированы: front=1, top=2, right=3, left=4, bottom=5, back=6
 // (противоположные грани в сумме дают 7, как на настоящем кубике). Чтобы
@@ -3642,6 +3759,166 @@ function processDiceQueue() {
   });
 }
 
+// ---------- меню "скрепки": фото / кубик / подарок / звонок ----------
+function toggleAttachMenu() {
+  document.getElementById('attach-menu').classList.toggle('show');
+}
+document.addEventListener('click', function (e) {
+  var menu = document.getElementById('attach-menu');
+  var wrap = document.querySelector('.attach-menu-wrap');
+  if (menu && menu.classList.contains('show') && wrap && !wrap.contains(e.target)) menu.classList.remove('show');
+});
+
+function attachMenuAction(kind) {
+  document.getElementById('attach-menu').classList.remove('show');
+  if (kind === 'photo') document.getElementById('msg-photo-input').click();
+  else if (kind === 'dice') sendDiceRoll();
+  else if (kind === 'gift') document.getElementById('gift-photo-input').click();
+  else if (kind === 'call') openCallPicker();
+}
+
+function sendDiceRoll() {
+  if (!currentClub) return;
+  if (!activeCharacter) return showToast(t('toast_choose_character_first'));
+  api('/api/dice?club_id=' + currentClub.id, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ character_id: activeCharacter.id })
+  }).then(function (data) {
+    var m = data.message;
+    lastMessageId = Math.max(lastMessageId, m.id);
+    enqueueDiceReveal(m, document.getElementById('messages'));
+  }).catch(function (e) { showToast(e.message); });
+}
+
+// ---------- подарок: просто фото, но всегда скрытое до нажатия (сюрприз) ----------
+function onGiftPhotoPicked(file) {
+  var input = document.getElementById('gift-photo-input');
+  if (!file) return;
+  if (!currentClub || !activeCharacter) { input.value = ''; return showToast(t('toast_choose_character_first')); }
+  showToast(t('toast_uploading_photo'));
+  fetch('/api/message-photo', {
+    method: 'POST',
+    headers: { 'Content-Type': file.type || 'image/jpeg', 'X-Tg-Init-Data': (tg && tg.initData) || '' },
+    body: file
+  }).then(function (r) { return r.json().then(function (d) { if (!r.ok) throw new Error(d.error); return d; }); })
+    .then(function (data) {
+      return api('/api/messages?club_id=' + currentClub.id, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ character_id: activeCharacter.id, photo_file_id: data.photo_file_id, is_gift: true })
+      });
+    })
+    .then(function (data) {
+      lastMessageId = Math.max(lastMessageId, data.message.id);
+      var box = document.getElementById('messages');
+      box.appendChild(renderMessage(data.message));
+      box.scrollTop = box.scrollHeight;
+    })
+    .catch(function (e) { showToast(e.message); })
+    .finally(function () { input.value = ''; });
+}
+
+// ---------- звонок: сначала "от кого", потом "кому" ----------
+var callFromCharacter = null;
+
+function openCallPicker() {
+  if (!currentClub) return;
+  callFromCharacter = null;
+  api('/api/characters').then(function (data) {
+    renderCallPickList(data.characters || [], t('call_pick_from_title'), function (ch) {
+      callFromCharacter = ch;
+      api('/api/other-characters').then(function (data2) {
+        if (!data2.characters || !data2.characters.length) {
+          closeCallPicker();
+          return showToast(t('toast_other_has_no_characters'));
+        }
+        renderCallPickList(data2.characters, t('call_pick_to_title'), function (target) {
+          sendCall(callFromCharacter, target);
+        });
+      }).catch(function (e) { closeCallPicker(); showToast(e.message); });
+    });
+    document.getElementById('call-picker-overlay').classList.add('active');
+  }).catch(function (e) { showToast(e.message); });
+}
+
+function renderCallPickList(list, title, onPick) {
+  document.getElementById('call-picker-title').textContent = title;
+  var container = document.getElementById('call-picker-list');
+  container.innerHTML = '';
+  list.forEach(function (ch) {
+    var card = document.createElement('div');
+    card.className = 'entry-row';
+    card.innerHTML = '<img class="avatar-thumb" src="/api/tg-photo?file_id=' + encodeURIComponent(ch.avatar_file_id) + '">' +
+      '<div class="entry-info"><div class="entry-name">' + escapeHtml(ch.name) + '</div></div>' +
+      '<span class="entry-arrow">&rarr;</span>';
+    card.onclick = function () { onPick(ch); };
+    container.appendChild(card);
+  });
+}
+
+function closeCallPicker() {
+  document.getElementById('call-picker-overlay').classList.remove('active');
+  callFromCharacter = null;
+}
+
+function sendCall(fromCharacter, toCharacter) {
+  closeCallPicker();
+  if (!currentClub || !fromCharacter || !toCharacter) return;
+  api('/api/call?club_id=' + currentClub.id, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ character_id: fromCharacter.id, call_to_character_id: toCharacter.id })
+  }).then(function (data) {
+    lastMessageId = Math.max(lastMessageId, data.message.id);
+    showToast(t('toast_call_sent')(data.call_to_name || toCharacter.name));
+  }).catch(function (e) { showToast(e.message); });
+}
+
+// ---------- уведомление "входящий звонок" (см. ответы пользователя в этой
+// сессии: показывается только если получатель уже в этой же комнате - через
+// обычный опрос сообщений, - и чисто визуальное: кнопки просто закрывают
+// окно, никакого отдельного "звонкового" состояния не заводится) ----------
+var incomingCallTimeout = null;
+var ringInterval = null;
+
+function ringTone() {
+  if (!notifyAudioCtx) return;
+  try {
+    if (notifyAudioCtx.state === 'suspended') notifyAudioCtx.resume();
+    var t0 = notifyAudioCtx.currentTime;
+    [[880, 0], [880, 0.4]].forEach(function (pair) {
+      var osc = notifyAudioCtx.createOscillator();
+      var gain = notifyAudioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = pair[0];
+      gain.gain.setValueAtTime(0.0001, t0 + pair[1]);
+      gain.gain.exponentialRampToValueAtTime(0.22, t0 + pair[1] + 0.03);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + pair[1] + 0.3);
+      osc.connect(gain);
+      gain.connect(notifyAudioCtx.destination);
+      osc.start(t0 + pair[1]);
+      osc.stop(t0 + pair[1] + 0.32);
+    });
+  } catch (e) {}
+}
+
+function showIncomingCallOverlay(m) {
+  document.getElementById('incoming-call-avatar').src = m.character_avatar_file_id
+    ? '/api/tg-photo?file_id=' + encodeURIComponent(m.character_avatar_file_id) : '';
+  document.getElementById('incoming-call-name').textContent = m.character_name || m.user_name || t('guest');
+  document.getElementById('incoming-call-sub').textContent = t('incoming_call_sub');
+  document.getElementById('incoming-call-overlay').classList.add('active');
+  ringTone();
+  if (ringInterval) clearInterval(ringInterval);
+  ringInterval = setInterval(ringTone, 2500);
+  if (incomingCallTimeout) clearTimeout(incomingCallTimeout);
+  incomingCallTimeout = setTimeout(function () { respondToCall(false); }, 25000);
+}
+
+function respondToCall(accepted) {
+  document.getElementById('incoming-call-overlay').classList.remove('active');
+  if (ringInterval) { clearInterval(ringInterval); ringInterval = null; }
+  if (incomingCallTimeout) { clearTimeout(incomingCallTimeout); incomingCallTimeout = null; }
+}
+
 function tickHtml(messageId) {
   var read = messageId <= otherReadId;
   return '<span class="tick' + (read ? ' read' : '') + '">' + (read ? '✓✓' : '✓') + '</span>';
@@ -3668,9 +3945,12 @@ function renderMessage(m) {
   var photoHtml = '';
   if (m.photo_file_id) {
     var isBlurred = !!m.photo_blurred && !m.photo_revealed;
+    var revealHint = m.gift_key
+      ? '<div class="msg-photo-reveal-hint"><span class="eye">&#127873;</span>' + t('gift_tap_to_open') + '</div>'
+      : '<div class="msg-photo-reveal-hint"><span class="eye">&#128065;</span>' + t('tap_to_view') + '</div>';
     photoHtml = '<div class="msg-photo-wrap' + (isBlurred ? ' blurred' : '') + '">' +
       '<img class="msg-photo" src="/api/tg-photo?file_id=' + encodeURIComponent(m.photo_file_id) + '">' +
-      (isBlurred ? '<div class="msg-photo-reveal-hint"><span class="eye">&#128065;</span>' + t('tap_to_view') + '</div>' : '') +
+      (isBlurred ? revealHint : '') +
       '</div>';
   }
   var textHtml = (m.text || m.dice_value) ? ('<div>' + bodyHtml + '</div>') : '';
@@ -3754,6 +4034,10 @@ function pollMessages() {
           if (oldestMessageId === null || m.id < oldestMessageId) oldestMessageId = m.id;
           if (m.edited_at && m.edited_at > lastEditCheck) lastEditCheck = m.edited_at;
           if (m.dice_value && !isInitialLoad) { enqueueDiceReveal(m, box); return; }
+          // Звонок - чисто визуальное уведомление (см. showIncomingCallOverlay),
+          // в саму ленту сообщений пузырём не добавляется вообще, ни сейчас,
+          // ни при следующем входе в комнату.
+          if (m.call_to_character_id) { if (!isInitialLoad && m.is_incoming_call_for_me) showIncomingCallOverlay(m); return; }
           var existing = box.querySelector('[data-id="' + m.id + '"]');
           if (existing) existing.replaceWith(renderMessage(m)); else box.appendChild(renderMessage(m));
         });
@@ -3866,14 +4150,7 @@ function sendMessage() {
   if (!pendingPhotoFileId && text.toLowerCase() === '/dice') {
     input.value = '';
     autoGrowTextarea(input);
-    api('/api/dice?club_id=' + currentClub.id, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ character_id: activeCharacter.id })
-    }).then(function (data) {
-      var m = data.message;
-      lastMessageId = Math.max(lastMessageId, m.id);
-      enqueueDiceReveal(m, document.getElementById('messages'));
-    }).catch(function (e) { showToast(e.message); });
+    sendDiceRoll();
     return;
   }
 

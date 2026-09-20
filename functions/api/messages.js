@@ -71,10 +71,24 @@ async function notifyRecipients(env, clubId, senderId, messageId) {
 // JOIN'ы для каждого варианта WHERE/ORDER ниже.
 const MESSAGE_COLUMNS =
   "cm.id, cm.user_id, cm.user_name, cm.text, cm.created_at, cm.edited_at, cm.character_id, cm.character_name, " +
-  "cm.character_avatar_file_id, cm.is_attention, cm.photo_file_id, cm.photo_blurred, cm.dice_value, ch.gender AS character_gender, " +
+  "cm.character_avatar_file_id, cm.is_attention, cm.photo_file_id, cm.photo_blurred, cm.dice_value, cm.gift_key, " +
+  "cm.call_to_character_id, callee.owner_id AS call_target_owner_id, ch.gender AS character_gender, " +
   "CASE WHEN cm.photo_blurred = 0 OR cm.user_id = ? OR cpr.user_id IS NOT NULL THEN 1 ELSE 0 END AS photo_revealed " +
   "FROM club_messages cm LEFT JOIN characters ch ON ch.id = cm.character_id " +
+  "LEFT JOIN characters callee ON callee.id = cm.call_to_character_id " +
   "LEFT JOIN club_photo_reveals cpr ON cpr.message_id = cm.id AND cpr.user_id = ?";
+
+// Отметить, звонок ли это лично текущему пользователю (сравнение владельца
+// персонажа-адресата с userId) - без этого клиент не мог бы отличить "звонок
+// мне" от "звонок ещё кому-то в этой же комнате" (в будущем, если участников
+// станет больше двух).
+function markIncomingCalls(rows, userId) {
+  return rows.map(function (row) {
+    row.is_incoming_call_for_me = !!(row.call_to_character_id && String(row.call_target_owner_id) === String(userId));
+    delete row.call_target_owner_id;
+    return row;
+  });
+}
 
 // Сколько сообщений подгружать при первом входе в комнату, если непрочитанных
 // мало или нет - остальная история грузится только по запросу (пролистывание
@@ -155,7 +169,7 @@ export async function onRequestGet(context) {
   ).bind(String(userId), clubId, String(userId)).first();
 
   return json({
-    messages: results || [],
+    messages: markIncomingCalls(results || [], userId),
     has_more: hasMore,
     other_read_id: (otherRead && otherRead.v != null) ? otherRead.v : 0,
     attention_id: (attention && attention.v != null) ? attention.v : 0,
@@ -175,7 +189,13 @@ export async function onRequestPost(context) {
   const text = (body.text || "").trim();
   const characterId = body.character_id;
   const photoFileId = body.photo_file_id || null;
-  const photoBlurred = photoFileId && body.photo_blurred ? 1 : 0;
+  const isGift = !!body.is_gift;
+  // Подарок - всегда фото, и всегда скрыто до нажатия (сюрприз), независимо
+  // от того, что пришло в photo_blurred - галочка "скрыть до нажатия" в
+  // обычном прикреплении фото тут ни при чём, это отдельная кнопка меню.
+  if (isGift && !photoFileId) return json({ error: "Для подарка нужно фото." }, 400);
+  const photoBlurred = isGift ? 1 : (photoFileId && body.photo_blurred ? 1 : 0);
+  const giftKey = isGift ? "photo" : null;
   if (!text && !photoFileId) return json({ error: "Пустое сообщение." }, 400);
   if (text.length > 4000) return json({ error: "Слишком длинное сообщение." }, 400);
   if (!characterId) return json({ error: "Сначала выберите персонажа." }, 400);
@@ -191,10 +211,10 @@ export async function onRequestPost(context) {
   let message = null;
   try {
     message = await env.DB.prepare(
-      "INSERT INTO club_messages (club_id, user_id, user_name, text, character_id, character_name, character_avatar_file_id, is_attention, photo_file_id, photo_blurred) " +
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) " +
-        "RETURNING id, user_id, user_name, text, created_at, edited_at, character_id, character_name, character_avatar_file_id, is_attention, photo_file_id, photo_blurred"
-    ).bind(clubId, String(userId), userName || null, text, character.id, character.name, character.avatar_file_id, isAttention, photoFileId, photoBlurred).first();
+      "INSERT INTO club_messages (club_id, user_id, user_name, text, character_id, character_name, character_avatar_file_id, is_attention, photo_file_id, photo_blurred, gift_key) " +
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) " +
+        "RETURNING id, user_id, user_name, text, created_at, edited_at, character_id, character_name, character_avatar_file_id, is_attention, photo_file_id, photo_blurred, gift_key"
+    ).bind(clubId, String(userId), userName || null, text, character.id, character.name, character.avatar_file_id, isAttention, photoFileId, photoBlurred, giftKey).first();
   } catch (e) {
     console.log("Ошибка отправки сообщения:", e.message);
     return json({ error: "Не удалось отправить сообщение." }, 500);
