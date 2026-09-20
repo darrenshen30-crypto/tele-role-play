@@ -4594,8 +4594,16 @@ function openSettings() {
   var bgUrl = backgroundImageUrl(currentClub);
   if (bgUrl) { preview.src = bgUrl; preview.style.display = 'block'; }
   else { preview.style.display = 'none'; }
+  // currentClub - локальный кэш этой сессии, который не обновляется, если
+  // фон/ссылку на музыку поменял второй участник - подтягиваем актуальные
+  // значения из базы, а не показываем возможно устаревшее поле пустым.
   document.getElementById('music-input').value = currentClub.music_url || '';
   showScreen('settings');
+  api('/api/club?id=' + currentClub.id).then(function (data) {
+    if (!data.club || currentScreenName !== 'settings') return;
+    currentClub.music_url = data.club.music_url;
+    document.getElementById('music-input').value = data.club.music_url || '';
+  }).catch(function () {});
 }
 
 function uploadBackground(file) {
@@ -4777,11 +4785,21 @@ function toggleMusic() {
 
 function requestStartMusic() {
   if (!currentClub) return;
-  var videoId = extractYouTubeId(currentClub.music_url);
-  if (!videoId) return showToast(t('toast_music_link_missing'));
-  ensurePlayer(videoId).then(unlockAudioGesture);
+  // currentClub.music_url - локальный кэш этой сессии; если ссылку только
+  // что сохранил ВТОРОЙ участник (см. saveMusic - обновляет только его
+  // собственный currentClub), у этого клиента она ещё пустая или старая,
+  // хотя в базе всё в порядке. Сервер всегда сам проверяет актуальное
+  // значение (см. club-playback-start.js), поэтому не блокируем запрос
+  // локальной проверкой - только используем её как повод прогреть плеер
+  // пораньше (надёжнее для автовоспроизведения, ближе к самому клику).
+  var localVideoId = extractYouTubeId(currentClub.music_url);
+  if (localVideoId) ensurePlayer(localVideoId).then(unlockAudioGesture);
   api('/api/club-playback-start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ club_id: currentClub.id }) })
-    .then(pollPlayback).catch(function (e) { showToast(e.message); pollPlayback(); });
+    .then(function (data) {
+      if (!localVideoId && data && data.video_id) ensurePlayer(data.video_id).then(unlockAudioGesture);
+      return pollPlayback();
+    })
+    .catch(function (e) { showToast(e.message); pollPlayback(); });
 }
 
 function markReady() {
