@@ -4210,9 +4210,35 @@ function showIncomingCallOverlay(m) {
   incomingCallTimeout = setTimeout(function () { respondToCall(false); }, 5000);
 }
 
+// Короткие гудки "сброс" - как на айфоне при отклонении звонка: два быстрых
+// коротких сигнала и тишина (в отличие от долгого рингтона/гудков ожидания).
+function declineTone() {
+  if (!notifyAudioCtx) return;
+  try {
+    if (notifyAudioCtx.state === 'suspended') notifyAudioCtx.resume();
+    var t0 = notifyAudioCtx.currentTime;
+    [0, 0.35].forEach(function (offset) {
+      var osc = notifyAudioCtx.createOscillator();
+      var gain = notifyAudioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = 480;
+      var at = t0 + offset;
+      gain.gain.setValueAtTime(0.0001, at);
+      gain.gain.exponentialRampToValueAtTime(0.2, at + 0.02);
+      gain.gain.setValueAtTime(0.2, at + 0.22);
+      gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.28);
+      osc.connect(gain);
+      gain.connect(notifyAudioCtx.destination);
+      osc.start(at);
+      osc.stop(at + 0.3);
+    });
+  } catch (e) {}
+}
+
 function respondToCall(accepted) {
   document.getElementById('incoming-call-overlay').classList.remove('active');
   if (incomingCallTimeout) { clearTimeout(incomingCallTimeout); incomingCallTimeout = null; }
+  if (!accepted) declineTone();
   var call = pendingIncomingCall;
   pendingIncomingCall = null;
   // Оповещение "звонок принят/отклонён" - обычное сообщение в чате от лица
