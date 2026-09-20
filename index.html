@@ -3812,6 +3812,7 @@ function leaveChat() {
   if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
   if (playbackPollTimer) { clearInterval(playbackPollTimer); playbackPollTimer = null; }
   stopRingback();
+  stopRingTone();
   stopLocalPlayback();
   cancelEdit();
   playbackKeySeen = null;
@@ -4131,30 +4132,45 @@ function confirmTransfer() {
 var incomingCallTimeout = null;
 var pendingIncomingCall = null;
 
-// Одна "трель" длиной ~5 секунд (как рингтон на айфоне) - десять
-// двутональных импульсов, разнесённых по всему пятисекундному окну.
-function ringTone() {
+function playTonePulse(freq, atOffset) {
   if (!notifyAudioCtx) return;
   try {
-    if (notifyAudioCtx.state === 'suspended') notifyAudioCtx.resume();
-    var t0 = notifyAudioCtx.currentTime;
-    [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5].forEach(function (offset) {
-      [[880, 0], [1046, 0.16]].forEach(function (pair) {
-        var osc = notifyAudioCtx.createOscillator();
-        var gain = notifyAudioCtx.createGain();
-        osc.type = 'sine';
-        osc.frequency.value = pair[0];
-        var at = t0 + offset + pair[1];
-        gain.gain.setValueAtTime(0.0001, at);
-        gain.gain.exponentialRampToValueAtTime(0.22, at + 0.03);
-        gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.28);
-        osc.connect(gain);
-        gain.connect(notifyAudioCtx.destination);
-        osc.start(at);
-        osc.stop(at + 0.3);
-      });
-    });
+    var t0 = notifyAudioCtx.currentTime + atOffset;
+    var osc = notifyAudioCtx.createOscillator();
+    var gain = notifyAudioCtx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0.0001, t0);
+    gain.gain.exponentialRampToValueAtTime(0.22, t0 + 0.03);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.28);
+    osc.connect(gain);
+    gain.connect(notifyAudioCtx.destination);
+    osc.start(t0);
+    osc.stop(t0 + 0.3);
   } catch (e) {}
+}
+
+// Одна "трель" длиной ~5 секунд (как рингтон на айфоне) - десять
+// двутональных импульсов на всё пятисекундное окно. Импульсы планируются
+// через setTimeout по одному, а не все разом через Web Audio-таймлайн, -
+// иначе stopRingTone() (нажали "Отклонить"/"Принять" раньше, чем трель
+// доиграла) не мог бы отменить уже запланированные, и следующий звук
+// (гудки отказа и т.п.) слышался бы поверх хвоста ещё звучащей трели.
+var ringToneTimeouts = [];
+function stopRingTone() {
+  ringToneTimeouts.forEach(clearTimeout);
+  ringToneTimeouts = [];
+}
+function ringTone() {
+  if (!notifyAudioCtx) return;
+  stopRingTone();
+  if (notifyAudioCtx.state === 'suspended') notifyAudioCtx.resume();
+  [0, 500, 1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500].forEach(function (offsetMs) {
+    ringToneTimeouts.push(setTimeout(function () {
+      playTonePulse(880, 0);
+      playTonePulse(1046, 0.16);
+    }, offsetMs));
+  });
 }
 
 // Гудки (не рингтон) для самого звонящего, пока "ждём ответа" - короткий
@@ -4210,34 +4226,33 @@ function showIncomingCallOverlay(m) {
   incomingCallTimeout = setTimeout(function () { respondToCall(false); }, 5000);
 }
 
-// Короткие гудки "сброс" - как на айфоне при отклонении звонка: два быстрых
-// коротких сигнала и тишина (в отличие от долгого рингтона/гудков ожидания).
+// Гудок "сброс" - как на айфоне при отклонении звонка: один короткий сигнал
+// (не два - "завершение звонка" должно звучать один раз, а не как ещё одна
+// маленькая трель).
 function declineTone() {
   if (!notifyAudioCtx) return;
   try {
     if (notifyAudioCtx.state === 'suspended') notifyAudioCtx.resume();
     var t0 = notifyAudioCtx.currentTime;
-    [0, 0.35].forEach(function (offset) {
-      var osc = notifyAudioCtx.createOscillator();
-      var gain = notifyAudioCtx.createGain();
-      osc.type = 'sine';
-      osc.frequency.value = 480;
-      var at = t0 + offset;
-      gain.gain.setValueAtTime(0.0001, at);
-      gain.gain.exponentialRampToValueAtTime(0.2, at + 0.02);
-      gain.gain.setValueAtTime(0.2, at + 0.22);
-      gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.28);
-      osc.connect(gain);
-      gain.connect(notifyAudioCtx.destination);
-      osc.start(at);
-      osc.stop(at + 0.3);
-    });
+    var osc = notifyAudioCtx.createOscillator();
+    var gain = notifyAudioCtx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = 480;
+    gain.gain.setValueAtTime(0.0001, t0);
+    gain.gain.exponentialRampToValueAtTime(0.2, t0 + 0.02);
+    gain.gain.setValueAtTime(0.2, t0 + 0.35);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.42);
+    osc.connect(gain);
+    gain.connect(notifyAudioCtx.destination);
+    osc.start(t0);
+    osc.stop(t0 + 0.44);
   } catch (e) {}
 }
 
 function respondToCall(accepted) {
   document.getElementById('incoming-call-overlay').classList.remove('active');
   if (incomingCallTimeout) { clearTimeout(incomingCallTimeout); incomingCallTimeout = null; }
+  stopRingTone();
   if (!accepted) declineTone();
   var call = pendingIncomingCall;
   pendingIncomingCall = null;
@@ -4414,12 +4429,16 @@ function pollMessages() {
           // запись в ленте у обоих (см. transfer-log в renderMessage).
           if (m.transfer_to_character_id && !isInitialLoad && m.is_incoming_transfer_for_me) showIncomingTransferOverlay(m);
           // Звонящий не видит всплывающее окно с кнопками (оно только у
-          // адресата), но услышать исход "отклонили" тоже должен - через
-          // тот же опрос, по факту смены call_response на его собственном
-          // звонке (m.user_id - как раз звонящий, см. call.js).
-          if (m.call_to_character_id && !isInitialLoad && m.call_response === 'declined' &&
+          // адресата), но услышать исход тоже должен - через тот же опрос,
+          // по факту смены call_response на его собственном звонке (m.user_id
+          // - как раз звонящий, см. call.js). Гудки ожидания сразу глушим,
+          // как только известен исход - иначе они играют поверх гудка отказа
+          // ещё до истечения своих 5 секунд (то самое "накладываются друг
+          // на друга").
+          if (m.call_to_character_id && !isInitialLoad && m.call_response &&
               tg && tg.initDataUnsafe && tg.initDataUnsafe.user && String(tg.initDataUnsafe.user.id) === String(m.user_id)) {
-            declineTone();
+            stopRingback();
+            if (m.call_response === 'declined') declineTone();
           }
           var existing = box.querySelector('[data-id="' + m.id + '"]');
           if (existing) existing.replaceWith(renderMessage(m)); else box.appendChild(renderMessage(m));
