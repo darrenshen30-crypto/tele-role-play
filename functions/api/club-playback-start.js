@@ -23,7 +23,7 @@ function extractYouTubeId(url) {
   return m ? m[1] : null;
 }
 
-const START_BUFFER_MS = 2500;
+const START_BUFFER_MS = 3000;
 
 export async function onRequestPost(context) {
   const env = context.env;
