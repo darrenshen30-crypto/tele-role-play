@@ -41,5 +41,11 @@ export async function onRequestPatch(context) {
     console.log("Ошибка редактирования личного сообщения:", e.message);
     return json({ error: "Не удалось отредактировать сообщение." }, 500);
   }
+
+  // Если это правка самого последнего сообщения переписки - обновить кэш
+  // превью на dm_threads (см. dm-threads.js). WHERE по last_message_id не
+  // заденет ничего, если отредактировали не самое последнее сообщение.
+  context.waitUntil(env.DB.prepare("UPDATE dm_threads SET last_message_text = ? WHERE last_message_id = ?").bind(text, id).run());
+
   return json({ message: updated });
 }

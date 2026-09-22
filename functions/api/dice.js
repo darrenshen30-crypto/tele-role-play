@@ -92,6 +92,11 @@ export async function onRequestPost(context) {
   message.photo_revealed = 1;
 
   context.waitUntil(notifyRecipients(env, clubId, userId, message.id));
+  // Кэш "последнего сообщения" на clubs (см. clubs.js) - без этого список
+  // локаций не заметил бы, что тут только что бросили кубик.
+  context.waitUntil(env.DB.prepare(
+    "UPDATE clubs SET last_message_id = ?, last_message_user_id = ?, last_message_text = '', last_message_character = ? WHERE id = ?"
+  ).bind(message.id, String(userId), character.name, clubId).run());
 
   return json({ message: message });
 }

@@ -159,6 +159,12 @@ export async function onRequestPost(context) {
   if (replyTo) message.reply = { id: replyTo.id, text: replyTo.text, character_name: replyTo.character_name };
 
   context.waitUntil(notifyRecipient(env, threadId, access.other.owner_id, message.id));
+  // Кэш "последнего сообщения" на sms_threads (см. sms-threads.js) - список
+  // переписок читает отсюда вместо пересчёта по всей истории при каждом опросе.
+  context.waitUntil(env.DB.prepare(
+    "UPDATE sms_threads SET last_message_id = ?, last_message_sender = ?, last_message_at = ?, " +
+      "last_message_text = ?, last_message_character = ? WHERE id = ?"
+  ).bind(message.id, String(userId), message.created_at, text, access.mine.name, threadId).run());
 
   return json({ message: message });
 }

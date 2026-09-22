@@ -28,20 +28,23 @@ export async function onRequestGet(context) {
   const userId = context.data && context.data.tgUserId;
   if (!isOwner(env, userId)) return json({ error: "Нет доступа." }, 403);
 
+  // "Последнее сообщение" читается из кэш-колонок на самой dm_threads (см.
+  // dm-messages.js - пишет туда при отправке), а не пересчитывается тут через
+  // MAX(id) по dm_messages - см. тот же комментарий в clubs.js о дневном
+  // лимите чтения D1, который этот способ и исчерпал.
   const { results } = await env.DB.prepare(
     "SELECT t.id, " +
       "t.user_low_id AS low_id, lp.display_name AS low_display_name, lp.name AS low_name, lp.avatar_file_id AS low_avatar_file_id, lp.photo_url AS low_photo_url, " +
       "t.user_high_id AS high_id, hp.display_name AS high_display_name, hp.name AS high_name, hp.avatar_file_id AS high_avatar_file_id, hp.photo_url AS high_photo_url, " +
-      "lm.id AS last_message_id, lm.sender_user_id AS last_message_sender, lm.created_at AS last_message_at, lm.text AS last_message_text, " +
+      "t.last_message_id AS last_message_id, t.last_message_sender AS last_message_sender, " +
+      "t.last_message_at AS last_message_at, t.last_message_text AS last_message_text, " +
       "COALESCE(r.last_read_message_id, 0) AS last_read_message_id " +
       "FROM dm_threads t " +
       "LEFT JOIN user_presence lp ON lp.user_id = t.user_low_id " +
       "LEFT JOIN user_presence hp ON hp.user_id = t.user_high_id " +
-      "LEFT JOIN (SELECT thread_id, MAX(id) AS id FROM dm_messages GROUP BY thread_id) lmid ON lmid.thread_id = t.id " +
-      "LEFT JOIN dm_messages lm ON lm.id = lmid.id " +
       "LEFT JOIN dm_reads r ON r.thread_id = t.id AND r.user_id = ? " +
       "WHERE t.user_low_id = ? OR t.user_high_id = ? " +
-      "ORDER BY COALESCE(lm.created_at, t.created_at) DESC"
+      "ORDER BY COALESCE(t.last_message_at, t.created_at) DESC"
   ).bind(String(userId), String(userId), String(userId)).all();
 
   const threads = (results || []).map(function (row) {

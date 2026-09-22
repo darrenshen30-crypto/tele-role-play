@@ -112,6 +112,11 @@ export async function onRequestPost(context) {
   }
 
   context.waitUntil(notifyRecipient(env, threadId, access.otherId, message.id));
+  // Кэш "последнего сообщения" на dm_threads (см. dm-threads.js) - список
+  // переписок читает отсюда вместо пересчёта по всей истории при каждом опросе.
+  context.waitUntil(env.DB.prepare(
+    "UPDATE dm_threads SET last_message_id = ?, last_message_sender = ?, last_message_at = ?, last_message_text = ? WHERE id = ?"
+  ).bind(message.id, String(userId), message.created_at, text, threadId).run());
 
   return json({ message: message });
 }

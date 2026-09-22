@@ -48,6 +48,11 @@ export async function onRequestPatch(context) {
   }
   updated.photo_revealed = 1;
 
+  // Если это редактируемое сообщение и есть кэшированное "последнее сообщение"
+  // локации (см. clubs.js) - обновить текст превью. WHERE по last_message_id
+  // не заденет ничего, если отредактировали не самое последнее сообщение.
+  context.waitUntil(env.DB.prepare("UPDATE clubs SET last_message_text = ? WHERE last_message_id = ?").bind(text, id).run());
+
   if (updated.character_id) {
     const character = await env.DB.prepare("SELECT gender FROM characters WHERE id = ?").bind(updated.character_id).first();
     updated.character_gender = character ? character.gender : null;

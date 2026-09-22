@@ -55,5 +55,11 @@ export async function onRequestPost(context) {
   message.character_gender = character.gender;
   message.photo_revealed = 1;
 
+  // Кэш "последнего сообщения" на clubs (см. clubs.js) - без этого список
+  // локаций не заметил бы, что тут только что был звонок.
+  context.waitUntil(env.DB.prepare(
+    "UPDATE clubs SET last_message_id = ?, last_message_user_id = ?, last_message_text = '', last_message_character = ? WHERE id = ?"
+  ).bind(message.id, String(userId), character.name, clubId).run());
+
   return json({ message: message, call_to_name: target.name });
 }

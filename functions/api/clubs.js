@@ -17,14 +17,18 @@ export async function onRequestGet(context) {
   const userId = context.data && context.data.tgUserId;
   if (!isOwner(env, userId)) return json({ error: "Нет доступа." }, 403);
 
+  // "Последнее сообщение" читается из кэш-колонок на самой clubs (см.
+  // messages.js/dice.js/call.js/transfer.js - каждая пишет туда при отправке),
+  // а не пересчитывается тут через MAX(id) по club_messages: тот способ
+  // пересматривал всю историю комнаты при каждом опросе (список локаций
+  // опрашивается раз в несколько секунд) и в проде упёрся в дневной лимит
+  // чтения D1 - чем длиннее становилась история, тем дороже был каждый опрос.
   const { results } = await env.DB.prepare(
     "SELECT c.id, c.name, c.category, c.background_file_id, c.background_updated_at, c.music_url, c.owner_id, " +
-      "lm.id AS last_message_id, lm.user_id AS last_message_user_id, lm.text AS last_message_text, " +
-      "lm.character_name AS last_message_character, " +
+      "c.last_message_id AS last_message_id, c.last_message_user_id AS last_message_user_id, " +
+      "c.last_message_text AS last_message_text, c.last_message_character AS last_message_character, " +
       "COALESCE(r.last_read_message_id, 0) AS last_read_message_id " +
       "FROM clubs c " +
-      "LEFT JOIN (SELECT club_id, MAX(id) AS id FROM club_messages GROUP BY club_id) lmid ON lmid.club_id = c.id " +
-      "LEFT JOIN club_messages lm ON lm.id = lmid.id " +
       "LEFT JOIN club_reads r ON r.club_id = c.id AND r.user_id = ? " +
       "ORDER BY c.category, c.name"
   ).bind(String(userId)).all();

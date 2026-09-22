@@ -239,6 +239,9 @@ export async function onRequestPost(context) {
   message.photo_revealed = 1;
 
   context.waitUntil(notifyRecipients(env, clubId, userId, message.id));
+  context.waitUntil(env.DB.prepare(
+    "UPDATE clubs SET last_message_id = ?, last_message_user_id = ?, last_message_text = ?, last_message_character = ? WHERE id = ?"
+  ).bind(message.id, String(userId), text, character.name, clubId).run());
 
   return json({ message: message });
 }

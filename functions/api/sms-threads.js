@@ -18,21 +18,24 @@ export async function onRequestGet(context) {
   const userId = context.data && context.data.tgUserId;
   if (!isOwner(env, userId)) return json({ error: "Нет доступа." }, 403);
 
+  // "Последнее сообщение" читается из кэш-колонок на самой sms_threads (см.
+  // sms-messages.js - пишет туда при отправке), а не пересчитывается тут через
+  // MAX(id) по sms_messages - см. тот же комментарий в clubs.js о дневном
+  // лимите чтения D1, который этот способ и исчерпал.
   const { results } = await env.DB.prepare(
     "SELECT t.id, " +
       "cl.id AS low_id, cl.name AS low_name, cl.avatar_file_id AS low_avatar, cl.owner_id AS low_owner, " +
       "ch.id AS high_id, ch.name AS high_name, ch.avatar_file_id AS high_avatar, ch.owner_id AS high_owner, " +
-      "lm.id AS last_message_id, lm.sender_user_id AS last_message_sender, lm.created_at AS last_message_at, " +
-      "lm.text AS last_message_text, lm.character_name AS last_message_character, " +
+      "t.last_message_id AS last_message_id, t.last_message_sender AS last_message_sender, " +
+      "t.last_message_at AS last_message_at, t.last_message_text AS last_message_text, " +
+      "t.last_message_character AS last_message_character, " +
       "COALESCE(r.last_read_message_id, 0) AS last_read_message_id " +
       "FROM sms_threads t " +
       "JOIN characters cl ON cl.id = t.char_low_id " +
       "JOIN characters ch ON ch.id = t.char_high_id " +
-      "LEFT JOIN (SELECT thread_id, MAX(id) AS id FROM sms_messages GROUP BY thread_id) lmid ON lmid.thread_id = t.id " +
-      "LEFT JOIN sms_messages lm ON lm.id = lmid.id " +
       "LEFT JOIN sms_reads r ON r.thread_id = t.id AND r.user_id = ? " +
       "WHERE cl.owner_id = ? OR ch.owner_id = ? " +
-      "ORDER BY COALESCE(lm.created_at, t.created_at) DESC"
+      "ORDER BY COALESCE(t.last_message_at, t.created_at) DESC"
   ).bind(String(userId), String(userId), String(userId)).all();
 
   const threads = (results || []).map(function (row) {
