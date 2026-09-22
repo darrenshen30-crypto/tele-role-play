@@ -177,17 +177,27 @@ export async function onRequestGet(context) {
       owners.map(function () { return "?"; }).join(",") + ")"
   ).bind(clubId, String(userId), ...owners).first();
 
-  const attention = await env.DB.prepare(
-    "SELECT MAX(cm.id) AS v FROM club_messages cm LEFT JOIN club_attention_dismissed cad " +
-      "ON cad.club_id = cm.club_id AND cad.user_id = ? " +
-      "WHERE cm.club_id = ? AND cm.user_id != ? AND cm.is_attention = 1 AND cm.id > COALESCE(cad.last_dismissed_id, 0)"
-  ).bind(String(userId), clubId, String(userId)).first();
+  // "Последнее сообщение с #внимание#" читается из кэша на clubs (см.
+  // onRequestPost ниже), а не пересчитывается через MAX(id) по всей истории
+  // club_messages - тот способ выполнялся БЕЗУСЛОВНО на каждом опросе комнаты
+  // (каждые 4с, пока чат открыт) и был главным источником исчерпания
+  // дневного лимита чтения D1 (2026-09-22, вторая находка того же класса
+  // проблемы - первая была в clubs.js/sms-threads.js/dm-threads.js).
+  const attentionRow = await env.DB.prepare(
+    "SELECT c.last_attention_id AS id, c.last_attention_user_id AS sender, " +
+      "COALESCE(cad.last_dismissed_id, 0) AS dismissed " +
+      "FROM clubs c LEFT JOIN club_attention_dismissed cad ON cad.club_id = c.id AND cad.user_id = ? " +
+      "WHERE c.id = ?"
+  ).bind(String(userId), clubId).first();
+  const attentionId = (attentionRow && attentionRow.id != null &&
+    String(attentionRow.sender) !== String(userId) && attentionRow.id > attentionRow.dismissed)
+    ? attentionRow.id : 0;
 
   return json({
     messages: markIncomingCalls(results || [], userId),
     has_more: hasMore,
     other_read_id: (otherRead && otherRead.v != null) ? otherRead.v : 0,
-    attention_id: (attention && attention.v != null) ? attention.v : 0,
+    attention_id: attentionId,
     initial_edit_baseline: isInitial ? initialEditBaseline : undefined,
   });
 }
@@ -242,6 +252,11 @@ export async function onRequestPost(context) {
   context.waitUntil(env.DB.prepare(
     "UPDATE clubs SET last_message_id = ?, last_message_user_id = ?, last_message_text = ?, last_message_character = ? WHERE id = ?"
   ).bind(message.id, String(userId), text, character.name, clubId).run());
+  if (isAttention) {
+    context.waitUntil(env.DB.prepare(
+      "UPDATE clubs SET last_attention_id = ?, last_attention_user_id = ? WHERE id = ?"
+    ).bind(message.id, String(userId), clubId).run());
+  }
 
   return json({ message: message });
 }
