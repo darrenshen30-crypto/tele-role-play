@@ -1406,6 +1406,7 @@
       <div id="sms-chat-title" class="sms-title">Собеседник</div>
       <div id="sms-chat-subtitle" class="sms-subtitle">от лица...</div>
     </div>
+    <button class="icon-btn" onclick="deleteSmsThread()">&#128465;</button>
   </div>
   <div id="sms-messages" class="sms-messages"></div>
   <button type="button" id="sms-scroll-bottom-btn" class="scroll-bottom-btn">&#8595;</button>
@@ -1818,6 +1819,8 @@ var I18N = {
     toast_music_saved: 'Музыка сохранена.',
     toast_music_link_missing: 'Ссылка на музыку не задана. Добавьте её в настройках клуба.',
     confirm_delete_location: function (name) { return 'Удалить локацию «' + name + '»? Сообщения, фон и музыка будут потеряны безвозвратно.'; },
+    toast_sms_thread_deleted: 'Переписка удалена.',
+    confirm_delete_sms_thread: function (name) { return 'Удалить переписку с «' + name + '»? Все сообщения будут потеряны безвозвратно, у обоих.'; },
 
     playback_waiting_ready: function (ready, total) { return 'Ждём остальных: готовы ' + ready + ' из ' + total + '...'; },
     playback_someone_offers: 'Кто-то предлагает включить музыку в клубе.',
@@ -2031,6 +2034,8 @@ var I18N = {
     toast_music_saved: 'Music saved.',
     toast_music_link_missing: "No music link set. Add one in the location's settings.",
     confirm_delete_location: function (name) { return 'Delete location "' + name + '"? Messages, background and music will be lost forever.'; },
+    toast_sms_thread_deleted: 'Chat deleted.',
+    confirm_delete_sms_thread: function (name) { return 'Delete the chat with "' + name + '"? All messages will be lost forever, for both of you.'; },
 
     playback_waiting_ready: function (ready, total) { return 'Waiting for others: ' + ready + ' of ' + total + ' ready...'; },
     playback_someone_offers: 'Someone wants to play music in the location.',
@@ -3321,6 +3326,24 @@ function leaveSmsChat() {
   cancelSmsReply();
   currentSmsThread = null;
   openSmsListScreen();
+}
+
+function deleteSmsThread() {
+  if (!currentSmsThread) return;
+  var thread = currentSmsThread;
+  var doDelete = function () {
+    api('/api/sms-thread?id=' + thread.id, { method: 'DELETE' })
+      .then(function () {
+        leaveSmsChat();
+        showToast(t('toast_sms_thread_deleted'));
+      }).catch(function (e) { showToast(e.message); });
+  };
+  var message = t('confirm_delete_sms_thread')(thread.other.name);
+  if (tg && tg.showConfirm) {
+    tg.showConfirm(message, function (ok) { if (ok) doDelete(); });
+  } else if (window.confirm(message)) {
+    doDelete();
+  }
 }
 
 function scrollToSmsMessage(id) {
