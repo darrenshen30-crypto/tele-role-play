@@ -193,11 +193,20 @@ export async function onRequestGet(context) {
     String(attentionRow.sender) !== String(userId) && attentionRow.id > attentionRow.dismissed)
     ? attentionRow.id : 0;
 
+  // Кто сейчас отмечен в этой локации (см. club-checkin.js) - переиспользует
+  // уже идущий 4-секундный опрос комнаты вместо отдельного нового поллинга;
+  // club_checkins всегда маленькая таблица, дёшево при любой частоте.
+  const checkinRows = await env.DB.prepare(
+    "SELECT ch.name AS character_name FROM club_checkins cc JOIN characters ch ON ch.id = cc.character_id " +
+      "WHERE cc.club_id = ? AND cc.checked_in_at > datetime('now', '-24 hours')"
+  ).bind(clubId).all();
+
   return json({
     messages: markIncomingCalls(results || [], userId),
     has_more: hasMore,
     other_read_id: (otherRead && otherRead.v != null) ? otherRead.v : 0,
     attention_id: attentionId,
+    checked_in_characters: (checkinRows.results || []).map(function (r) { return r.character_name; }),
     initial_edit_baseline: isInitial ? initialEditBaseline : undefined,
   });
 }

@@ -641,7 +641,9 @@
     display: flex; align-items: center; justify-content: center;
     flex-shrink: 0;
   }
-  .chat-title { flex: 1; font-family: var(--lp-font-display); font-size: 21px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .chat-title-wrap { flex: 1; min-width: 0; }
+  .chat-title { font-family: var(--lp-font-display); font-size: 21px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .chat-presence { font-size: var(--lp-text-time); color: var(--ink-soft); opacity: 0.7; margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .chat-body {
     position: relative; z-index: 1;
     flex: 1;
@@ -1445,7 +1447,10 @@
   <div id="chat-bg" class="chat-bg"></div>
   <div class="chat-top">
     <button class="icon-btn" onclick="leaveChat()">&larr;</button>
-    <div id="chat-title" class="chat-title">Локация</div>
+    <div class="chat-title-wrap">
+      <div id="chat-title" class="chat-title">Локация</div>
+      <div id="chat-presence" class="chat-presence"></div>
+    </div>
     <button class="icon-btn" onclick="openCharacterPicker('switch')" data-i18n-title="change_character_title" title="Сменить персонажа">&#127917;</button>
     <button id="music-btn" class="icon-btn" onclick="toggleMusic()">&#9835;</button>
     <button class="icon-btn" onclick="openSettings()">&#9881;</button>
@@ -3819,6 +3824,7 @@ function openChat(club, origin) {
   cancelEdit();
   document.getElementById('messages').innerHTML = '';
   document.getElementById('chat-title').textContent = club.name;
+  updateChatPresence(club.checked_in_characters);
   applyBackground(club);
   showScreen('chat');
   pollTick();
@@ -4485,6 +4491,16 @@ function updateAttentionBanner(id) {
   document.getElementById('attention-banner').classList.toggle('show', attentionId > 0);
 }
 
+// Та же приглушённая строка "Здесь: ...", что и в списке локаций (см.
+// openCategory), только теперь и внутри самого чата - обновляется каждым
+// опросом /api/messages (см. checked_in_characters в его ответе), без
+// отдельного нового поллинга.
+function updateChatPresence(names) {
+  var el = document.getElementById('chat-presence');
+  if (!el) return;
+  el.textContent = (names && names.length) ? t('checked_in_here')(names.join(', ')) : '';
+}
+
 function dismissAttention() {
   document.getElementById('attention-banner').classList.remove('show');
   if (!currentClub || !attentionId) return;
@@ -4507,6 +4523,7 @@ function pollMessages() {
     .then(function (data) {
       otherReadId = data.other_read_id || 0;
       updateAttentionBanner(data.attention_id);
+      updateChatPresence(data.checked_in_characters);
       if (isInitialLoad) hasMoreOlderMessages = !!data.has_more;
       // Хвост при входе показывает не всю историю комнаты - без явного
       // "текущего" порога правок следующий обычный опрос принял бы за новые
