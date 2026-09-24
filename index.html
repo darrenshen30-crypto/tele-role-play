@@ -279,6 +279,10 @@
     font-size: var(--lp-text-meta); color: var(--ink-soft); margin-top: 2px;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
+  .entry-presence {
+    font-size: var(--lp-text-time); color: var(--ink-soft); opacity: 0.7; margin-top: 2px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
   .entry-arrow { color: var(--lp-accent-ink); font-size: 18px; flex-shrink: 0; }
   .entry-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--wine); flex-shrink: 0; margin-right: -2px; }
 
@@ -1479,6 +1483,7 @@
           <button type="button" onclick="attachMenuAction('gift')"><span class="ic">&#127873;</span><span data-i18n="attach_gift">Отправить подарок</span></button>
           <button type="button" onclick="attachMenuAction('call')"><span class="ic">&#128222;</span><span data-i18n="attach_call">Позвонить</span></button>
           <button type="button" onclick="attachMenuAction('transfer')"><span class="ic">&#128181;</span><span data-i18n="attach_transfer">Перевести деньги</span></button>
+          <button type="button" onclick="attachMenuAction('checkin')"><span class="ic">&#128205;</span><span data-i18n="attach_checkin">Отметиться здесь</span></button>
         </div>
         <input type="file" id="msg-photo-input" accept="image/*" style="display:none;" onchange="onMessagePhotoPicked(this.files[0])" />
         <input type="file" id="gift-photo-input" accept="image/*" style="display:none;" onchange="onGiftPhotoPicked(this.files[0])" />
@@ -1704,6 +1709,12 @@ var I18N = {
     attach_gift: 'Отправить подарок',
     attach_call: 'Позвонить',
     attach_transfer: 'Перевести деньги',
+    attach_checkin: 'Отметиться здесь',
+    checkin_pick_title: 'Кем отметиться?',
+    checkin_already_here: 'уже здесь - нажмите, чтобы выйти',
+    toast_checked_in: function (name) { return name + ' теперь здесь.'; },
+    toast_checked_out: function (name) { return name + ' покинул(а) локацию.'; },
+    checked_in_here: function (names) { return 'Здесь: ' + names; },
     gift_tap_to_open: 'Подарок - нажмите, чтобы открыть',
     call_pick_from_title: 'От чьего лица звонить?',
     call_pick_to_title: 'Кому позвонить?',
@@ -1919,6 +1930,12 @@ var I18N = {
     attach_gift: 'Send a gift',
     attach_call: 'Call',
     attach_transfer: 'Send money',
+    attach_checkin: 'Check in here',
+    checkin_pick_title: 'Check in as which character?',
+    checkin_already_here: 'already here - tap to check out',
+    toast_checked_in: function (name) { return name + ' is now here.'; },
+    toast_checked_out: function (name) { return name + ' left the location.'; },
+    checked_in_here: function (names) { return 'Here: ' + names; },
     gift_tap_to_open: 'Gift - tap to open',
     call_pick_from_title: 'Call as which character?',
     call_pick_to_title: 'Call whom?',
@@ -2533,10 +2550,13 @@ function openCategory(cat) {
       var sub = c.last_message_text
         ? (c.last_message_character ? escapeHtml(c.last_message_character) + ': ' : '') + escapeHtml(c.last_message_text)
         : t('room_quiet');
+      var presence = (c.checked_in_characters && c.checked_in_characters.length)
+        ? '<div class="entry-presence">' + t('checked_in_here')(c.checked_in_characters.map(escapeHtml).join(', ')) + '</div>'
+        : '';
       card.innerHTML =
         '<div class="entry-avatar-letter">' + escapeHtml((c.name || '?').charAt(0).toUpperCase()) + '</div>' +
         '<div class="entry-info"><div class="entry-name">' + escapeHtml(c.name) + '</div>' +
-        '<div class="entry-sub">' + sub + '</div></div>' +
+        '<div class="entry-sub">' + sub + '</div>' + presence + '</div>' +
         (c.unread ? '<span class="entry-dot"></span>' : '') +
         '<span class="entry-arrow">&rarr;</span>';
       card.onclick = function () { enterLocation(c, 'category'); };
@@ -3970,6 +3990,59 @@ function attachMenuAction(kind) {
   else if (kind === 'gift') document.getElementById('gift-photo-input').click();
   else if (kind === 'call') openCallPicker();
   else if (kind === 'transfer') openTransferPicker();
+  else if (kind === 'checkin') openCheckinPicker();
+}
+
+// ---------- чекин: пометить, что персонаж сейчас в этой локации ----------
+// Переиспользует тот же список-пикер, что и звонок (call-picker-overlay) -
+// отдельный overlay под чекин не нужен, это просто ещё один "выбери
+// персонажа из списка". Клик по персонажу, который уже отмечен здесь,
+// снимает отметку (выход) - отдельной кнопки "выйти" не требуется.
+function openCheckinPicker() {
+  if (!currentClub) return;
+  Promise.all([
+    api('/api/characters'),
+    api('/api/club-checkin?club_id=' + currentClub.id),
+  ]).then(function (res) {
+    var chars = res[0].characters || [];
+    var hereIds = (res[1].character_ids || []).map(String);
+    document.getElementById('call-picker-title').textContent = t('checkin_pick_title');
+    var container = document.getElementById('call-picker-list');
+    container.innerHTML = '';
+    chars.forEach(function (ch) {
+      var isHere = hereIds.indexOf(String(ch.id)) !== -1;
+      var card = document.createElement('div');
+      card.className = 'entry-row';
+      card.innerHTML = '<img class="avatar-thumb" src="/api/tg-photo?file_id=' + encodeURIComponent(ch.avatar_file_id) + '">' +
+        '<div class="entry-info"><div class="entry-name">' + escapeHtml(ch.name) + '</div>' +
+        (isHere ? '<div class="entry-sub">' + t('checkin_already_here') + '</div>' : '') + '</div>' +
+        '<span class="entry-arrow">' + (isHere ? '&times;' : '&rarr;') + '</span>';
+      card.onclick = function () { isHere ? doCheckout(ch) : doCheckin(ch); };
+      container.appendChild(card);
+    });
+    document.getElementById('call-picker-overlay').classList.add('active');
+  }).catch(function (e) { showToast(e.message); });
+}
+
+function doCheckin(ch) {
+  closeCallPicker();
+  if (!currentClub) return;
+  api('/api/club-checkin', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ club_id: currentClub.id, character_id: ch.id }),
+  }).then(function () {
+    showToast(t('toast_checked_in')(ch.name));
+    pollClubsQuiet();
+  }).catch(function (e) { showToast(e.message); });
+}
+
+function doCheckout(ch) {
+  closeCallPicker();
+  api('/api/club-checkin?character_id=' + encodeURIComponent(ch.id), { method: 'DELETE' })
+    .then(function () {
+      showToast(t('toast_checked_out')(ch.name));
+      pollClubsQuiet();
+    }).catch(function (e) { showToast(e.message); });
 }
 
 function sendDiceRoll() {

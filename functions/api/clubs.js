@@ -33,6 +33,21 @@ export async function onRequestGet(context) {
       "ORDER BY c.category, c.name"
   ).bind(String(userId)).all();
 
+  // Кто сейчас "отмечен" в локациях (см. club-checkin.js) - отдельным
+  // запросом, а не JOIN'ом к clubs, потому что в одной локации может быть
+  // отмечено сразу несколько персонажей (JOIN размножил бы строки клубов).
+  // Таблица club_checkins всегда маленькая (не больше персонажей в проекте),
+  // так что это дёшево даже при частом опросе списка локаций.
+  const checkinRows = await env.DB.prepare(
+    "SELECT cc.club_id, ch.name AS character_name FROM club_checkins cc " +
+      "JOIN characters ch ON ch.id = cc.character_id " +
+      "WHERE cc.checked_in_at > datetime('now', '-24 hours')"
+  ).all();
+  const checkinsByClub = {};
+  (checkinRows.results || []).forEach(function (row) {
+    (checkinsByClub[row.club_id] = checkinsByClub[row.club_id] || []).push(row.character_name);
+  });
+
   const clubs = (results || []).map(function (row) {
     const unread = !!row.last_message_id &&
       String(row.last_message_user_id) !== String(userId) &&
@@ -43,6 +58,7 @@ export async function onRequestGet(context) {
       music_url: row.music_url, owner_id: row.owner_id, unread: unread,
       last_message_text: row.last_message_text || null,
       last_message_character: row.last_message_character || null,
+      checked_in_characters: checkinsByClub[row.id] || [],
     };
   });
 
