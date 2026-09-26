@@ -3,11 +3,29 @@
 // нет ни аудио, ни отдельной сессии звонка, только специальная строка в
 // club_messages (call_to_character_id вместо dice_value/gift_key), которую
 // получатель увидит через обычный опрос /api/messages, пока сам находится в
-// этой же комнате. Никакого пуша в Telegram нарочно не шлём - оповещение
-// работает только "здесь и сейчас", как договорились с пользователем.
+// этой же комнате. Дополнительно владельцу вызываемого персонажа уходит пуш от
+// бота - иначе звонок пропадает, если человек сейчас в другой комнате или вне
+// приложения. Пуш шлём безусловно (без фильтра "в сети" и без счётчика
+// непрочитанных, как у обычных сообщений): присутствие не знает, в какой именно
+// комнате человек, а пропущенный звонок хуже лишнего уведомления.
 
 function json(obj, status = 200) {
   return new Response(JSON.stringify(obj), { status: status, headers: { "Content-Type": "application/json" } });
+}
+
+async function notifyCallee(env, calleeOwnerId, callerName, targetName) {
+  try {
+    const resp = await fetch("https://api.telegram.org/bot" + env.BOT_TOKEN + "/sendMessage", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: calleeOwnerId, text: "Входящий звонок: " + callerName + " звонит " + targetName + "." }),
+    });
+    if (!resp.ok) {
+      console.log("Telegram sendMessage отказал (" + resp.status + ") для " + calleeOwnerId + ":", await resp.text());
+    }
+  } catch (e) {
+    console.log("Ошибка уведомления о звонке " + calleeOwnerId + ":", e.message);
+  }
 }
 
 function isOwner(env, id) {
@@ -54,6 +72,10 @@ export async function onRequestPost(context) {
   }
   message.character_gender = character.gender;
   message.photo_revealed = 1;
+
+  if (isOwner(env, target.owner_id)) {
+    context.waitUntil(notifyCallee(env, target.owner_id, character.name, target.name));
+  }
 
   // Кэш "последнего сообщения" на clubs (см. clubs.js) - без этого список
   // локаций не заметил бы, что тут только что был звонок.
