@@ -446,9 +446,12 @@
   }
   .story-like-char-title { font-family: var(--lp-font-display); font-size: 15px; color: var(--ink); margin-bottom: 12px; text-align: center; }
   .story-like-char-list { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
-  .story-like-char-card { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 68px; cursor: pointer; }
-  .story-like-char-card .avatar-thumb { width: 56px; height: 56px; border-radius: 50%; object-fit: cover; }
+  .story-like-char-card { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 68px; cursor: pointer; position: relative; }
+  .story-like-char-card .avatar-thumb { width: 56px; height: 56px; border-radius: 50%; object-fit: cover; border: 2px solid transparent; }
+  .story-like-char-card.liked .avatar-thumb { border-color: #ff4d6d; }
   .story-like-char-card .name { font-size: 12px; color: var(--ink); text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+  .story-like-char-heart { font-size: 13px; color: var(--ink-soft); }
+  .story-like-char-card.liked .story-like-char-heart { color: #ff4d6d; }
 
   /* ---- пол персонажа: альфа/омега/гамма ---- */
   .gender-pick { display: flex; gap: 8px; margin-bottom: 4px; }
@@ -517,7 +520,7 @@
   .sms-subtitle { font-size: 11px; color: var(--ink-soft); }
   .sms-messages { flex: 1; overflow-y: auto; padding: 16px 14px; display: flex; flex-direction: column; gap: 8px; }
   .sms-msg { max-width: 78%; padding: 10px 14px; font-size: var(--lp-text-body); line-height: 1.45; }
-  .sms-msg.mine { align-self: flex-end; background: var(--lp-solid); color: var(--lp-solid-ink); border-radius: var(--lp-bubble-mine); border: 1px solid var(--lp-solid); }
+  .sms-msg.mine { align-self: flex-end; background: var(--lp-bubble); color: var(--ink); border-radius: var(--lp-bubble-mine); border: 1px solid var(--lp-bubble-line); }
   .sms-msg.theirs { align-self: flex-start; background: var(--lp-bubble); color: var(--ink); border-radius: var(--lp-bubble-other); border: 1px solid var(--lp-bubble-line); }
   .sms-msg .msg-time { font-size: var(--lp-text-time); opacity: 0.7; margin-top: 3px; text-align: right; }
   .sms-msg .tick { opacity: 0.7; }
@@ -660,10 +663,9 @@
   .msg a, .sms-msg a { color: inherit; text-decoration: underline; word-break: break-word; }
   .msg .who { font-size: 11px; margin-bottom: 3px; font-weight: 700; display: flex; align-items: center; gap: 5px; }
   .msg-avatar { width: 26px; height: 26px; border-radius: 50%; object-fit: cover; border: 2px solid var(--lp-line); }
-  .msg.mine { align-self: flex-end; background: var(--lp-solid); color: var(--lp-solid-ink); border-radius: var(--lp-bubble-mine); border: 1px solid var(--lp-solid); }
+  .msg.mine { align-self: flex-end; background: var(--lp-bubble); color: var(--ink); border-radius: var(--lp-bubble-mine); border: 1px solid var(--lp-bubble-line); }
   .msg.theirs { align-self: flex-start; background: var(--lp-bubble); color: var(--ink); border-radius: var(--lp-bubble-other); border: 1px solid var(--lp-bubble-line); }
-  .msg.theirs .who { color: var(--ink-soft); }
-  .msg.mine .who { color: var(--lp-solid-ink); opacity: 0.7; }
+  .msg.theirs .who, .msg.mine .who { color: var(--ink-soft); }
   .msg-time { font-size: var(--lp-text-time); opacity: 0.6; margin-top: 3px; text-align: right; }
 
   /* ---- фото в сообщении, с опцией "скрыть до нажатия" ---- */
@@ -2215,6 +2217,8 @@ var storyGroupIndex = 0;
 var storyItemIndex = 0;
 var storyViewReturnTo = 'list';
 var storyAdvanceTimer = null;
+var storyTimerStartedAt = 0;
+var storyTimerRemaining = 0;
 var storySelectedCharacterId = null;
 var storyPhotoFileId = null;
 var storyTaggedIds = [];
@@ -3033,7 +3037,7 @@ function renderCurrentStory() {
   var mine = !!(myUserId() && String(story.owner_id) === myUserId());
   document.getElementById('story-delete-btn').style.display = mine ? 'flex' : 'none';
   updateStoryLikeUI(story, mine);
-  closeStoryLikeCharacterPicker();
+  document.getElementById('story-like-char-picker').style.display = 'none';
   renderStoryTagsRow(story);
   markStoryViewed(story);
 
@@ -3052,7 +3056,31 @@ function renderCurrentStory() {
     activeBar.classList.add('active');
     fill.style.animation = 'story-fill ' + STORY_DURATION_MS + 'ms linear forwards';
   }
+  storyTimerStartedAt = Date.now();
+  storyTimerRemaining = STORY_DURATION_MS;
   storyAdvanceTimer = setTimeout(storyNext, STORY_DURATION_MS);
+}
+
+// Пауза автопрокрутки истории, пока открыт пикер "от чьего лица лайк?" -
+// иначе история успевает пролистаться дальше, пока человек ещё выбирает
+// персонажа. Останавливаем и таймер, и CSS-анимацию полоски прогресса (через
+// animation-play-state, а не сброс - так после resume она продолжится с того
+// же места, а не начнётся заново).
+function pauseStoryAdvance() {
+  if (!storyAdvanceTimer) return;
+  clearTimeout(storyAdvanceTimer);
+  storyAdvanceTimer = null;
+  storyTimerRemaining = Math.max(0, storyTimerRemaining - (Date.now() - storyTimerStartedAt));
+  var fill = document.querySelector('#story-progress-row .story-progress-bar.active .story-progress-fill');
+  if (fill) fill.style.animationPlayState = 'paused';
+}
+
+function resumeStoryAdvance() {
+  if (storyAdvanceTimer) return;
+  var fill = document.querySelector('#story-progress-row .story-progress-bar.active .story-progress-fill');
+  if (fill) fill.style.animationPlayState = 'running';
+  storyTimerStartedAt = Date.now();
+  storyAdvanceTimer = setTimeout(storyNext, storyTimerRemaining);
 }
 
 // Отметки персонажей видны всем, в отличие от лайков - тап открывает
@@ -3114,27 +3142,21 @@ function updateStoryLikeUI(story, mine) {
   }
 }
 
-// Лайк ставится от лица персонажа, не аккаунта. Если персонаж один - берём
-// его без лишних вопросов; если несколько - спрашиваем один раз и помним
-// выбор в localStorage (снять лайк не требует персонажа - это просто тумблер
-// по user_id, персонаж нужен только чтобы поставить новый лайк).
+// Лайк ставится от лица персонажа, не аккаунта, и это per-character - у
+// каждого своего персонажа отдельный лайк, можно лайкнуть одной и той же
+// историей сразу несколькими. Один персонаж - лайк ставится/снимается прямо
+// по тапу на сердечко, без пикера. Несколько - открываем пикер, где виден
+// статус каждого персонажа и можно переключить любого, не закрывая шторку.
 function toggleStoryLike() {
   var group = storyGroups[storyGroupIndex];
   var story = group && group[storyItemIndex];
   if (!story) return;
-  if (story.liked_by_me) {
-    sendStoryLikeToggle(story, null);
-    return;
-  }
   ensureMyCharactersLoaded().then(function () {
     if (!myCharacters.length) return showToast(t('toast_create_own_character_first'));
     if (myCharacters.length === 1) {
-      sendStoryLikeToggle(story, myCharacters[0].id);
+      sendStoryLikeToggle(story, myCharacters[0].id, false);
       return;
     }
-    var remembered = localStorage.getItem('story_like_character_id');
-    var stillMine = remembered && myCharacters.some(function (ch) { return String(ch.id) === String(remembered); });
-    if (stillMine) { sendStoryLikeToggle(story, remembered); return; }
     openStoryLikeCharacterPicker(story);
   }).catch(function (e) { showToast(e.message); });
 }
@@ -3144,37 +3166,49 @@ function ensureMyCharactersLoaded() {
   return api('/api/characters').then(function (data) { myCharacters = data.characters; });
 }
 
+// Пикер держим открытым, пока пользователь сам его не закроет - это панель
+// "у кого из моих персонажей стоит лайк", а не одноразовый выбор, поэтому
+// пауза автопрокрутки (pauseStoryAdvance) снимается только в closeStoryLikeCharacterPicker.
 function openStoryLikeCharacterPicker(story) {
-  var wrap = document.getElementById('story-like-char-picker');
+  pauseStoryAdvance();
+  document.getElementById('story-like-char-picker').style.display = 'flex';
+  renderStoryLikeCharList(story);
+}
+
+function renderStoryLikeCharList(story) {
   var list = document.getElementById('story-like-char-list');
   list.innerHTML = '';
+  var likedIds = (story.liked_character_ids || []).map(String);
   myCharacters.forEach(function (ch) {
+    var liked = likedIds.indexOf(String(ch.id)) !== -1;
     var card = document.createElement('div');
-    card.className = 'story-like-char-card';
+    card.className = 'story-like-char-card' + (liked ? ' liked' : '');
     card.innerHTML = '<img class="avatar-thumb" src="/api/tg-photo?file_id=' + encodeURIComponent(ch.avatar_file_id) + '">' +
-      '<div class="name">' + escapeHtml(ch.name) + '</div>';
-    card.onclick = function () {
-      localStorage.setItem('story_like_character_id', ch.id);
-      wrap.style.display = 'none';
-      sendStoryLikeToggle(story, ch.id);
-    };
+      '<div class="name">' + escapeHtml(ch.name) + '</div>' +
+      '<div class="story-like-char-heart">' + (liked ? '&#9829;' : '&#9825;') + '</div>';
+    card.onclick = function () { sendStoryLikeToggle(story, ch.id, true); };
     list.appendChild(card);
   });
-  wrap.style.display = 'flex';
 }
 
 function closeStoryLikeCharacterPicker() {
   document.getElementById('story-like-char-picker').style.display = 'none';
+  resumeStoryAdvance();
 }
 
-function sendStoryLikeToggle(story, characterId) {
-  var body = characterId ? { character_id: characterId } : {};
+function sendStoryLikeToggle(story, characterId, fromPicker) {
   api('/api/story-like?id=' + story.id, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ character_id: characterId })
   }).then(function (data) {
-    story.liked_by_me = data.liked;
+    var ids = (story.liked_character_ids || []).map(String);
+    var idx = ids.indexOf(String(characterId));
+    if (data.liked && idx === -1) ids.push(String(characterId));
+    if (!data.liked && idx !== -1) ids.splice(idx, 1);
+    story.liked_character_ids = ids;
+    story.liked_by_me = ids.length > 0;
     story.like_count = Math.max(0, (story.like_count || 0) + (data.liked ? 1 : -1));
     updateStoryLikeUI(story, false);
+    if (fromPicker) renderStoryLikeCharList(story);
   }).catch(function (e) { showToast(e.message); });
 }
 

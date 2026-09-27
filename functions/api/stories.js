@@ -32,17 +32,33 @@ export async function onRequestGet(context) {
   const { results } = await env.DB.prepare(
     "SELECT s.id, s.owner_id, s.character_id, s.character_name, s.character_avatar_file_id, s.photo_file_id, s.created_at, " +
       "(SELECT COUNT(*) FROM story_likes sl WHERE sl.story_id = s.id) AS like_count, " +
-      "EXISTS(SELECT 1 FROM story_likes sl2 WHERE sl2.story_id = s.id AND sl2.user_id = ?) AS liked_by_me, " +
       "(s.owner_id = ? OR EXISTS(SELECT 1 FROM story_views sv WHERE sv.story_id = s.id AND sv.user_id = ?)) AS viewed_by_me " +
       "FROM stories s WHERE s.created_at > datetime('now', '-1 day') ORDER BY s.id ASC"
-  ).bind(String(userId), String(userId), String(userId)).all();
+  ).bind(String(userId), String(userId)).all();
 
   const stories = (results || []).map(function (row) {
     return {
       id: row.id, owner_id: row.owner_id, character_id: row.character_id, character_name: row.character_name,
       character_avatar_file_id: row.character_avatar_file_id, photo_file_id: row.photo_file_id, created_at: row.created_at,
-      like_count: row.like_count || 0, liked_by_me: !!row.liked_by_me, viewed_by_me: !!row.viewed_by_me,
+      like_count: row.like_count || 0, viewed_by_me: !!row.viewed_by_me,
     };
+  });
+
+  // Лайк теперь per-character - у одного аккаунта может быть сразу несколько
+  // персонажей, лайкнувших одну историю. liked_character_ids - id своих же
+  // персонажей, которые уже лайкнули (для подсветки в пикере выбора);
+  // liked_by_me (для сердечка-кнопки) true, если лайкнул хотя бы один.
+  const { results: myLikeRows } = await env.DB.prepare(
+    "SELECT story_id, character_id FROM story_likes " +
+      "WHERE user_id = ? AND story_id IN (SELECT id FROM stories WHERE created_at > datetime('now', '-1 day'))"
+  ).bind(String(userId)).all();
+  const myLikesByStory = {};
+  (myLikeRows || []).forEach(function (row) {
+    (myLikesByStory[row.story_id] = myLikesByStory[row.story_id] || []).push(row.character_id);
+  });
+  stories.forEach(function (s) {
+    s.liked_character_ids = myLikesByStory[s.id] || [];
+    s.liked_by_me = s.liked_character_ids.length > 0;
   });
 
   // Кто именно лайкнул - видно только автору истории, остальным только факт
