@@ -4391,6 +4391,19 @@ function declineTone() {
   } catch (e) {}
 }
 
+function goToClubById(clubId) {
+  var club = allClubs.filter(function (c) { return String(c.id) === String(clubId); })[0];
+  if (club) { openChat(club, 'call'); return; }
+  // Не нашли в уже загруженном списке (например, звонок пришёл раньше, чем
+  // список локаций вообще успел загрузиться) - подтягиваем свежий и пробуем
+  // ещё раз.
+  api('/api/clubs').then(function (data) {
+    allClubs = data.clubs;
+    var found = allClubs.filter(function (c) { return String(c.id) === String(clubId); })[0];
+    if (found) openChat(found, 'call');
+  }).catch(function () {});
+}
+
 function respondToCall(accepted) {
   document.getElementById('incoming-call-overlay').classList.remove('active');
   if (incomingCallTimeout) { clearTimeout(incomingCallTimeout); incomingCallTimeout = null; }
@@ -4398,17 +4411,25 @@ function respondToCall(accepted) {
   if (!accepted) declineTone();
   var call = pendingIncomingCall;
   pendingIncomingCall = null;
-  if (!call || !currentClub) return;
+  // call.club_id есть только у звонков, найденных через глобальную проверку
+  // (см. pollGlobalCallCheck) - когда звонок обнаружен обычным опросом уже
+  // открытой комнаты (pollMessages), в самой записи club_id нет (он и так
+  // известен по currentClub), поэтому фолбэк на currentClub.id ниже.
+  var clubId = call && (call.club_id || (currentClub && currentClub.id));
+  if (!call || !clubId) return;
   // Обновляем ту же запись о звонке (call_response), а не шлём отдельное
   // сообщение - и звонящий, и ответивший видят исход прямо на исходном
   // "Х звонит Y" через обычный опрос (см. renderMessage/pollMessages).
-  api('/api/call-respond?club_id=' + currentClub.id, {
+  api('/api/call-respond?club_id=' + clubId, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ message_id: call.id, accepted: accepted })
   }).then(function (data) {
     var updated = Object.assign({}, call, { call_response: data.message.call_response, edited_at: data.message.edited_at });
     var existing = document.querySelector('#messages [data-id="' + call.id + '"]');
     if (existing) existing.replaceWith(renderMessage(updated));
+    // Приняли звонок, но были не в этой комнате (звонок нашёлся через
+    // глобальную проверку) - переходим внутрь, чтобы продолжить сцену.
+    if (accepted && (!currentClub || String(currentClub.id) !== String(clubId))) goToClubById(clubId);
   }).catch(function () {});
 }
 
@@ -5133,6 +5154,27 @@ function pollSmsNotifications() {
   }).catch(function () {});
 }
 setInterval(pollSmsNotifications, 8000);
+
+// ---------- глобальная проверка входящих звонков - с любого экрана ----------
+// В отличие от pollSmsNotifications (легкий опрос списка переписок), здесь
+// нужно не просто тостом мигнуть, а полноценно показать оверлей "входящий
+// звонок" со звуком и кнопками принять/отклонить - как если бы получатель
+// уже сидел в нужной комнате (см. pollMessages/showIncomingCallOverlay).
+// Без этого звонок долетал бы только до того, кто уже сам открыл именно ту
+// локацию, что на практике означает "звонки почти никогда не звонят".
+function pollGlobalCallCheck() {
+  if (pendingIncomingCall) return; // уже показываем какой-то звонок
+  // Звонок в ЭТУ же комнату обычный опрос (pollMessages) обнаружит быстрее и
+  // точнее (4 секунды вместо этого более редкого глобального тика) - не
+  // дублируем всплытие.
+  api('/api/call-check').then(function (data) {
+    var call = data.call;
+    if (!call || pendingIncomingCall) return;
+    if (currentClub && String(currentClub.id) === String(call.club_id)) return;
+    showIncomingCallOverlay(call);
+  }).catch(function () {});
+}
+setInterval(pollGlobalCallCheck, 4000);
 
 function init() {
   updateGreeting();
