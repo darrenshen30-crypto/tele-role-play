@@ -509,6 +509,11 @@
     background: var(--panel); color: var(--ink); box-shadow: 0 2px 10px rgba(0,0,0,.25);
     display: flex; align-items: center; justify-content: center; font-size: 16px; cursor: pointer;
   }
+  /* .call-picker-sheet обычно использует полупрозрачный --panel (задуман
+     "стеклянным" поверх фона локации) - для звуков читаемость важнее, список
+     длиннее и просят непрозрачнее, поэтому только тут переопределяем плотным
+     --lp-scrim-1 (тот же токен, что у сплошной дымки/шторки в этом файле). */
+  #sound-fx-overlay .call-picker-sheet { background: var(--lp-scrim-1); }
   .sound-fx-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
   .sound-fx-row {
     display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 12px;
@@ -5108,8 +5113,6 @@ var cuedVideoId = null;
 var playbackKeySeen = null;
 var scheduledTimeout = null;
 var lastPlaybackState = null;
-var musicHiddenTimer = null;
-var musicLocallyStoppedByBackground = false;
 
 // Раньше требовал буквально "watch?v=" сразу после домена - ссылки из
 // приложения YouTube ("Поделиться") часто кладут метку "si=" ПЕРЕД "v=" (id
@@ -5183,61 +5186,10 @@ function setMusicButtonActive(on) {
 
 function stopLocalPlayback() {
   if (scheduledTimeout) { clearTimeout(scheduledTimeout); scheduledTimeout = null; }
-  if (musicHiddenTimer) { clearTimeout(musicHiddenTimer); musicHiddenTimer = null; }
   musicOn = false;
-  musicLocallyStoppedByBackground = false;
   if (ytPlayer && ytPlayer.pauseVideo) { try { ytPlayer.pauseVideo(); } catch (e) {} }
   setMusicButtonActive(false);
 }
-
-// ---------- музыка при сворачивании приложения ----------
-// Мобильные клиенты Telegram сами приостанавливают видео почти сразу же, как
-// только мини-апп уходит в фон (это ограничение ОС/WebView - JS страницы им
-// не управляет и не может "попросить" воспроизведение продолжаться в фоне).
-// Поэтому это не столько "включаем фоновое воспроизведение" (для встроенного
-// YouTube-плеера в мини-аппе это в принципе недостижимо на телефонах), сколько
-// два практических следствия: (1) короткое переключение (пришло сообщение,
-// свернули на секунду) не должно рвать сессию - при возврате в течение 10с
-// досинхронизируем плеер на текущую позицию по общему таймеру (start_at), а
-// не оставляем его молча стоящим на паузе; (2) если не вернулись за 10с -
-// останавливаем воспроизведение явно и только у себя (общая сессия у
-// собеседника не трогается), чтобы не жечь звук/трафик впустую, если
-// платформа почему-то этого не сделала сама.
-function resumePlaybackAfterForeground() {
-  if (!lastPlaybackState || lastPlaybackState.state !== 'playing' || !lastPlaybackState.start_at || !ytPlayer) return;
-  var elapsed = Math.max(0, (Date.now() - new Date(lastPlaybackState.start_at).getTime()) / 1000);
-  try {
-    ytPlayer.unMute();
-    ytPlayer.seekTo(elapsed, true);
-    ytPlayer.playVideo();
-  } catch (e) {}
-  musicOn = true;
-  musicLocallyStoppedByBackground = false;
-  setMusicButtonActive(true);
-}
-
-function onAppHiddenForMusic() {
-  if (!musicOn) return;
-  if (musicHiddenTimer) clearTimeout(musicHiddenTimer);
-  musicHiddenTimer = setTimeout(function () {
-    musicHiddenTimer = null;
-    if (!musicOn) return;
-    musicLocallyStoppedByBackground = true;
-    musicOn = false;
-    if (ytPlayer && ytPlayer.pauseVideo) { try { ytPlayer.pauseVideo(); } catch (e) {} }
-    setMusicButtonActive(false);
-  }, 10000);
-}
-
-function onAppVisibleForMusic() {
-  if (musicHiddenTimer) { clearTimeout(musicHiddenTimer); musicHiddenTimer = null; }
-  if (musicLocallyStoppedByBackground) return; // не успели вернуться за 10с - нужно нажать заново
-  if (musicOn) resumePlaybackAfterForeground();
-}
-
-document.addEventListener('visibilitychange', function () {
-  if (document.hidden) onAppHiddenForMusic(); else onAppVisibleForMusic();
-});
 
 function scheduleStart(videoId, startAtIso) {
   ensurePlayer(videoId).then(function () {
@@ -5267,12 +5219,7 @@ function toggleMusic() {
   } else if (s.state === 'waiting') {
     if (s.ready_user_ids.indexOf(uid) === -1) markReady(); else if (String(s.initiated_by) === uid) forceStart();
   } else if (s.state === 'playing') {
-    // Общая сессия ещё играет (у собеседника), а у меня локально звук
-    // остановился по 10-секундному таймауту сворачивания (см.
-    // onAppHiddenForMusic) - тогда нажатие должно вернуть звук ТОЛЬКО мне, а
-    // не остановить сессию всем, как обычная кнопка "стоп".
-    if (musicLocallyStoppedByBackground) resumePlaybackAfterForeground();
-    else requestStopMusic();
+    requestStopMusic();
   }
 }
 
