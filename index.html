@@ -502,6 +502,21 @@
   }
   .scroll-bottom-btn.show { opacity: 1; pointer-events: auto; transform: translateY(0); }
 
+  /* ---- звуки атмосферы - отдельная плавающая кнопка над "вниз" ---- */
+  .sound-fx-btn {
+    position: absolute; right: 16px; bottom: 140px; z-index: 5;
+    width: 38px; height: 38px; border-radius: 50%; border: none;
+    background: var(--panel); color: var(--ink); box-shadow: 0 2px 10px rgba(0,0,0,.25);
+    display: flex; align-items: center; justify-content: center; font-size: 16px; cursor: pointer;
+  }
+  .sound-fx-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+  .sound-fx-row {
+    display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 12px;
+    background: var(--lp-surface); cursor: pointer; font-size: var(--lp-text-body); color: var(--ink);
+  }
+  .sound-fx-row:hover, .sound-fx-row:active { background: var(--lp-tile-h); }
+  .sound-fx-row .ic { font-size: 20px; flex: none; }
+
   .sms-top {
     display: flex; align-items: center; gap: 10px; padding: 14px;
     padding-top: calc(14px + env(safe-area-inset-top));
@@ -1469,6 +1484,7 @@
     <div id="playback-banner" class="playback-banner"></div>
     <div id="messages" class="messages"></div>
     <button type="button" id="chat-scroll-bottom-btn" class="scroll-bottom-btn">&#8595;</button>
+    <button type="button" id="sound-fx-btn" class="sound-fx-btn" onclick="openSoundFxPicker()" data-i18n-title="sound_fx_title" title="Звуки атмосферы">&#128266;</button>
     <div id="edit-banner" class="playback-banner">
       <div class="txt" data-i18n="edit_message_banner">Редактирование сообщения</div>
       <button class="secondary" onclick="cancelEdit()" data-i18n="cancel">Отмена</button>
@@ -1571,6 +1587,14 @@
       </div>
     </div>
     <button type="button" class="secondary" onclick="closeTransferPicker()" data-i18n="cancel">Отмена</button>
+  </div>
+</div>
+
+<div id="sound-fx-overlay" class="call-overlay">
+  <div class="call-picker-sheet">
+    <div class="modal-title" data-i18n="sound_fx_title">Звуки атмосферы</div>
+    <div id="sound-fx-list" class="sound-fx-list"></div>
+    <button type="button" class="secondary" onclick="closeSoundFxPicker()" data-i18n="cancel">Отмена</button>
   </div>
 </div>
 
@@ -1722,6 +1746,17 @@ var I18N = {
     toast_checked_in: function (name) { return name + ' теперь здесь.'; },
     toast_checked_out: function (name) { return name + ' покинул(а) локацию.'; },
     checked_in_here: function (names) { return 'Здесь: ' + names; },
+    sound_fx_title: 'Звуки атмосферы',
+    sound_fx_glass_clink: 'Звон бокалов',
+    sound_fx_lighter: 'Зажигалка (3 раза)',
+    sound_fx_door_knock: 'Стук в дверь (3 раза)',
+    sound_fx_glasses_clink: 'Звон стаканов',
+    sound_fx_hookah: 'Затяжка кальяна',
+    sound_fx_doorbell: 'Звонок в дверь',
+    sound_fx_pour_water: 'Кипяток в кружку',
+    sound_fx_champagne_pop: 'Открытие шампанского',
+    sound_fx_beer_open: 'Открытие банки пива',
+    toast_sound_fx_unavailable: 'Собеседника сейчас нет в этой локации.',
     gift_tap_to_open: 'Подарок - нажмите, чтобы открыть',
     call_pick_from_title: 'От чьего лица звонить?',
     call_pick_to_title: 'Кому позвонить?',
@@ -1943,6 +1978,17 @@ var I18N = {
     toast_checked_in: function (name) { return name + ' is now here.'; },
     toast_checked_out: function (name) { return name + ' left the location.'; },
     checked_in_here: function (names) { return 'Here: ' + names; },
+    sound_fx_title: 'Ambience sounds',
+    sound_fx_glass_clink: 'Glasses clinking (toast)',
+    sound_fx_lighter: 'Lighter (3 times)',
+    sound_fx_door_knock: 'Knock on the door (3 times)',
+    sound_fx_glasses_clink: 'Glasses clinking (tumblers)',
+    sound_fx_hookah: 'Hookah puff',
+    sound_fx_doorbell: 'Doorbell',
+    sound_fx_pour_water: 'Pouring hot water into a cup',
+    sound_fx_champagne_pop: 'Champagne bottle opening',
+    sound_fx_beer_open: 'Beer can opening',
+    toast_sound_fx_unavailable: 'The other person is not in this location right now.',
     gift_tap_to_open: 'Gift - tap to open',
     call_pick_from_title: 'Call as which character?',
     call_pick_to_title: 'Call whom?',
@@ -2171,6 +2217,7 @@ var pendingPhotoFileId = null;
 var otherReadId = 0;
 var attentionId = 0;
 var forceScrollToBottom = false;
+var soundFxSeenId = 0;
 
 var myCharacters = [];
 var activeCharacter = null;
@@ -4541,6 +4588,212 @@ function updateReadTicks() {
   }
 }
 
+// ---------- звуки атмосферы - синхронный SFX для обоих, пока оба в комнате ----------
+// Ни одного аудиофайла - синтезируются на лету через Web Audio API, тем же
+// приёмом, что и остальные звуки в этом файле (ringTone/notifySound и т.п.),
+// на общем notifyAudioCtx (создаётся первым кликом/тапом где угодно в
+// приложении, см. unlockNotifySound). Доставка - см. pollMessages
+// (data.sound, поле того же 4-секундного опроса комнаты, без отдельного
+// поллинга) и messages.js/room-sound.js на бэкенде.
+var SOUND_FX_LIST = [
+  { key: 'glass_clink', icon: '🥂', labelKey: 'sound_fx_glass_clink' },
+  { key: 'lighter', icon: '🔥', labelKey: 'sound_fx_lighter' },
+  { key: 'door_knock', icon: '🚪', labelKey: 'sound_fx_door_knock' },
+  { key: 'glasses_clink', icon: '🥃', labelKey: 'sound_fx_glasses_clink' },
+  { key: 'hookah', icon: '💨', labelKey: 'sound_fx_hookah' },
+  { key: 'doorbell', icon: '🔔', labelKey: 'sound_fx_doorbell' },
+  { key: 'pour_water', icon: '☕', labelKey: 'sound_fx_pour_water' },
+  { key: 'champagne_pop', icon: '🍾', labelKey: 'sound_fx_champagne_pop' },
+  { key: 'beer_open', icon: '🍺', labelKey: 'sound_fx_beer_open' },
+];
+
+function noiseBuffer(durationSec) {
+  var ctx = notifyAudioCtx;
+  var frameCount = Math.max(1, Math.floor(ctx.sampleRate * durationSec));
+  var buffer = ctx.createBuffer(1, frameCount, ctx.sampleRate);
+  var data = buffer.getChannelData(0);
+  for (var i = 0; i < frameCount; i++) data[i] = Math.random() * 2 - 1;
+  return buffer;
+}
+
+function playNoiseBurst(opts) {
+  var ctx = notifyAudioCtx;
+  var t0 = ctx.currentTime + (opts.at || 0);
+  var src = ctx.createBufferSource();
+  src.buffer = noiseBuffer(opts.duration);
+  var filter = ctx.createBiquadFilter();
+  filter.type = opts.filterType || 'bandpass';
+  filter.frequency.value = opts.filterFreq || 1000;
+  filter.Q.value = opts.filterQ != null ? opts.filterQ : 1;
+  var gain = ctx.createGain();
+  var attack = opts.attack != null ? opts.attack : 0.005;
+  var release = opts.release != null ? opts.release : opts.duration;
+  var peak = opts.gainPeak != null ? opts.gainPeak : 0.3;
+  gain.gain.setValueAtTime(0.0001, t0);
+  gain.gain.exponentialRampToValueAtTime(peak, t0 + attack);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t0 + attack + release);
+  src.connect(filter);
+  filter.connect(gain);
+  gain.connect(ctx.destination);
+  src.start(t0);
+  src.stop(t0 + opts.duration + 0.05);
+}
+
+function playTone(opts) {
+  var ctx = notifyAudioCtx;
+  var t0 = ctx.currentTime + (opts.at || 0);
+  var osc = ctx.createOscillator();
+  osc.type = opts.type || 'sine';
+  osc.frequency.setValueAtTime(opts.freq, t0);
+  if (opts.freqEnd != null) osc.frequency.exponentialRampToValueAtTime(opts.freqEnd, t0 + opts.duration);
+  var gain = ctx.createGain();
+  var attack = opts.attack != null ? opts.attack : 0.01;
+  var release = opts.release != null ? opts.release : opts.duration;
+  var peak = opts.gainPeak != null ? opts.gainPeak : 0.25;
+  gain.gain.setValueAtTime(0.0001, t0);
+  gain.gain.exponentialRampToValueAtTime(peak, t0 + attack);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t0 + attack + release);
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  osc.start(t0);
+  osc.stop(t0 + opts.duration + 0.05);
+}
+
+function sfxGlassClink() {
+  playTone({ type: 'sine', freq: 3200, duration: 0.5, attack: 0.002, release: 0.5, gainPeak: 0.25 });
+  playTone({ type: 'sine', freq: 4200, duration: 0.4, attack: 0.002, release: 0.4, gainPeak: 0.18, at: 0.01 });
+  playTone({ type: 'triangle', freq: 2600, duration: 0.35, attack: 0.002, release: 0.35, gainPeak: 0.12, at: 0.02 });
+}
+
+function sfxLighter() {
+  [0, 0.35, 0.7].forEach(function (at) {
+    playNoiseBurst({ at: at, duration: 0.05, filterType: 'highpass', filterFreq: 3000, gainPeak: 0.3, attack: 0.001, release: 0.05 });
+    playTone({ at: at + 0.01, type: 'square', freq: 1800, duration: 0.04, attack: 0.001, release: 0.04, gainPeak: 0.08 });
+  });
+}
+
+function sfxDoorKnock() {
+  [0, 0.32, 0.64].forEach(function (at) {
+    playTone({ at: at, type: 'sine', freq: 130, duration: 0.12, attack: 0.001, release: 0.12, gainPeak: 0.35 });
+    playNoiseBurst({ at: at, duration: 0.06, filterType: 'bandpass', filterFreq: 400, filterQ: 1.2, gainPeak: 0.15, attack: 0.001, release: 0.06 });
+  });
+}
+
+function sfxGlassesClink() {
+  playTone({ type: 'sine', freq: 1900, duration: 0.4, attack: 0.002, release: 0.4, gainPeak: 0.22 });
+  playTone({ type: 'sine', freq: 2500, duration: 0.35, attack: 0.002, release: 0.35, gainPeak: 0.16, at: 0.08 });
+}
+
+function sfxHookah() {
+  playNoiseBurst({ duration: 1.1, filterType: 'lowpass', filterFreq: 500, filterQ: 0.7, gainPeak: 0.22, attack: 0.15, release: 0.9 });
+  [0.1, 0.3, 0.55, 0.8].forEach(function (at) {
+    playTone({ at: at, type: 'sine', freq: 180 + Math.random() * 60, duration: 0.1, attack: 0.005, release: 0.1, gainPeak: 0.1 });
+  });
+}
+
+function sfxDoorbell() {
+  playTone({ type: 'sine', freq: 1050, duration: 0.6, attack: 0.01, release: 0.6, gainPeak: 0.28 });
+  playTone({ type: 'sine', freq: 780, duration: 0.7, attack: 0.01, release: 0.7, gainPeak: 0.26, at: 0.45 });
+}
+
+// Не через playNoiseBurst - нужна плавная автоматизация частоты фильтра прямо
+// по ходу звука (тон повышается по мере наполнения кружки), а не постоянное
+// значение на весь burst.
+function sfxPourWater() {
+  var ctx = notifyAudioCtx;
+  var t0 = ctx.currentTime;
+  var dur = 1.3;
+  var src = ctx.createBufferSource();
+  src.buffer = noiseBuffer(dur);
+  var filter = ctx.createBiquadFilter();
+  filter.type = 'bandpass';
+  filter.Q.value = 0.9;
+  filter.frequency.setValueAtTime(700, t0);
+  filter.frequency.linearRampToValueAtTime(1900, t0 + dur);
+  var gain = ctx.createGain();
+  gain.gain.setValueAtTime(0.0001, t0);
+  gain.gain.exponentialRampToValueAtTime(0.22, t0 + 0.15);
+  gain.gain.setValueAtTime(0.22, t0 + dur - 0.25);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  src.connect(filter);
+  filter.connect(gain);
+  gain.connect(ctx.destination);
+  src.start(t0);
+  src.stop(t0 + dur + 0.05);
+}
+
+function sfxChampagnePop() {
+  playNoiseBurst({ duration: 0.05, filterType: 'highpass', filterFreq: 1500, gainPeak: 0.5, attack: 0.001, release: 0.05 });
+  playNoiseBurst({ at: 0.05, duration: 0.8, filterType: 'highpass', filterFreq: 4000, gainPeak: 0.08, attack: 0.01, release: 0.8 });
+}
+
+function sfxBeerOpen() {
+  playNoiseBurst({ duration: 0.02, filterType: 'bandpass', filterFreq: 2500, filterQ: 3, gainPeak: 0.25, attack: 0.001, release: 0.02 });
+  playNoiseBurst({ at: 0.03, duration: 0.35, filterType: 'highpass', filterFreq: 3000, gainPeak: 0.18, attack: 0.005, release: 0.35 });
+}
+
+var SOUND_FX_HANDLERS = {
+  glass_clink: sfxGlassClink,
+  lighter: sfxLighter,
+  door_knock: sfxDoorKnock,
+  glasses_clink: sfxGlassesClink,
+  hookah: sfxHookah,
+  doorbell: sfxDoorbell,
+  pour_water: sfxPourWater,
+  champagne_pop: sfxChampagnePop,
+  beer_open: sfxBeerOpen,
+};
+
+function playSoundFx(key) {
+  if (!notifyAudioCtx) return;
+  if (notifyAudioCtx.state === 'suspended') notifyAudioCtx.resume();
+  var fn = SOUND_FX_HANDLERS[key];
+  if (fn) fn();
+}
+
+function renderSoundFxList() {
+  var container = document.getElementById('sound-fx-list');
+  container.innerHTML = SOUND_FX_LIST.map(function (item) {
+    return '<div class="sound-fx-row" data-key="' + item.key + '"><span class="ic">' + item.icon + '</span><span>' + t(item.labelKey) + '</span></div>';
+  }).join('');
+}
+
+function openSoundFxPicker() {
+  if (!currentClub) return;
+  renderSoundFxList();
+  document.getElementById('sound-fx-overlay').classList.add('active');
+}
+
+function closeSoundFxPicker() {
+  document.getElementById('sound-fx-overlay').classList.remove('active');
+}
+
+document.getElementById('sound-fx-list').addEventListener('click', function (e) {
+  var row = e.target.closest('.sound-fx-row');
+  if (!row) return;
+  triggerSoundFx(row.dataset.key);
+});
+
+// Требует, чтобы собеседник прямо сейчас опрашивал ту же комнату (см.
+// club_reads.last_polled_at в messages.js/room-sound.js) - иначе сервер
+// отклонит запрос 400, и звук не проиграется вообще ни у кого (не только у
+// адресата), как и просили: "можно использовать, когда оба в комнате в сети".
+function triggerSoundFx(key) {
+  closeSoundFxPicker();
+  if (!currentClub) return;
+  api('/api/room-sound?club_id=' + currentClub.id, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ key: key })
+  }).then(function (data) {
+    // Проигрываем сразу сами, не дожидаясь своего же следующего опроса - тот
+    // же приём, что и у звонка/перевода (см. sendCall) - и заранее поднимаем
+    // soundFxSeenId, чтобы этот самый эффект не сыграл у нас же ещё раз
+    // повторно, когда обычный опрос комнаты вернёт этот id как "новый".
+    soundFxSeenId = Math.max(soundFxSeenId, data.sound_id);
+    playSoundFx(key);
+  }).catch(function (e) { showToast(e.message); });
+}
+
 function updateAttentionBanner(id) {
   attentionId = id || 0;
   document.getElementById('attention-banner').classList.toggle('show', attentionId > 0);
@@ -4580,6 +4833,17 @@ function pollMessages() {
       updateAttentionBanner(data.attention_id);
       updateChatPresence(data.checked_in_characters);
       if (isInitialLoad) hasMoreOlderMessages = !!data.has_more;
+      // Звук атмосферы (см. openSoundFxPicker/triggerSoundFx) - не часть
+      // истории сообщений, отдельное поле в том же ответе (last_sound_* на
+      // clubs, см. messages.js). При входе в комнату только запоминаем
+      // текущий id, не проигрывая его - иначе любой уже прозвучавший на
+      // сеанс звук всплывал бы заново при каждом открытии той же локации.
+      if (isInitialLoad) {
+        soundFxSeenId = (data.sound && data.sound.id) || 0;
+      } else if (data.sound && data.sound.id > soundFxSeenId) {
+        soundFxSeenId = data.sound.id;
+        playSoundFx(data.sound.key);
+      }
       // Хвост при входе показывает не всю историю комнаты - без явного
       // "текущего" порога правок следующий обычный опрос принял бы за новые
       // все когда-либо отредактированные сообщения всей комнаты (см. baseline

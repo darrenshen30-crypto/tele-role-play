@@ -183,8 +183,11 @@ export async function onRequestGet(context) {
   // (каждые 4с, пока чат открыт) и был главным источником исчерпания
   // дневного лимита чтения D1 (2026-09-22, вторая находка того же класса
   // проблемы - первая была в clubs.js/sms-threads.js/dm-threads.js).
+  // last_sound_* читается тем же запросом, что и last_attention_* - одна и та
+  // же строка clubs, лишнего чтения не добавляет (см. room-sound.js).
   const attentionRow = await env.DB.prepare(
     "SELECT c.last_attention_id AS id, c.last_attention_user_id AS sender, " +
+      "c.last_sound_id AS sound_id, c.last_sound_key AS sound_key, " +
       "COALESCE(cad.last_dismissed_id, 0) AS dismissed " +
       "FROM clubs c LEFT JOIN club_attention_dismissed cad ON cad.club_id = c.id AND cad.user_id = ? " +
       "WHERE c.id = ?"
@@ -192,6 +195,8 @@ export async function onRequestGet(context) {
   const attentionId = (attentionRow && attentionRow.id != null &&
     String(attentionRow.sender) !== String(userId) && attentionRow.id > attentionRow.dismissed)
     ? attentionRow.id : 0;
+  const sound = (attentionRow && attentionRow.sound_id)
+    ? { id: attentionRow.sound_id, key: attentionRow.sound_key } : null;
 
   // Кто сейчас отмечен в этой локации (см. club-checkin.js) - переиспользует
   // уже идущий 4-секундный опрос комнаты вместо отдельного нового поллинга;
@@ -201,11 +206,24 @@ export async function onRequestGet(context) {
       "WHERE cc.club_id = ? AND cc.checked_in_at > datetime('now', '-24 hours')"
   ).bind(clubId).all();
 
+  // Отмечаем, что этот пользователь прямо сейчас опрашивает именно эту
+  // локацию (см. room-sound.js: звук атмосферы разрешён, только если у
+  // собеседника есть такая же свежая отметка) - фоново, не блокирует ответ.
+  // datetime('now') на стороне SQL, а не JS-строка ISO с 'T'/'Z' - иначе
+  // текстовое сравнение "> datetime('now', '-8 seconds')" в room-sound.js
+  // сравнивало бы разные форматы и было бы не о времени, а о том, что 'T'
+  // лексикографически больше пробела.
+  context.waitUntil(env.DB.prepare(
+    "INSERT INTO club_reads (club_id, user_id, last_read_message_id, last_polled_at) VALUES (?, ?, 0, datetime('now')) " +
+      "ON CONFLICT(club_id, user_id) DO UPDATE SET last_polled_at = excluded.last_polled_at"
+  ).bind(clubId, String(userId)).run());
+
   return json({
     messages: markIncomingCalls(results || [], userId),
     has_more: hasMore,
     other_read_id: (otherRead && otherRead.v != null) ? otherRead.v : 0,
     attention_id: attentionId,
+    sound: sound,
     checked_in_characters: (checkinRows.results || []).map(function (r) { return r.character_name; }),
     initial_edit_baseline: isInitial ? initialEditBaseline : undefined,
   });
