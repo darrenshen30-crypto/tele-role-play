@@ -4670,17 +4670,31 @@ function sfxGlassClink() {
   playTone({ type: 'triangle', freq: 2600, duration: 0.35, attack: 0.002, release: 0.35, gainPeak: 0.12, at: 0.02 });
 }
 
+// Три щелчка кремня (металлический тик с лёгким призвоном) - на третьем,
+// "сработавшем", добавляется мягкий вспых пламени (кратковременный
+// низкочастотный "вуф"), как будто зажигалка прикурила не с первого раза.
 function sfxLighter() {
-  [0, 0.35, 0.7].forEach(function (at) {
-    playNoiseBurst({ at: at, duration: 0.05, filterType: 'highpass', filterFreq: 3000, gainPeak: 0.3, attack: 0.001, release: 0.05 });
-    playTone({ at: at + 0.01, type: 'square', freq: 1800, duration: 0.04, attack: 0.001, release: 0.04, gainPeak: 0.08 });
+  [0, 0.38, 0.78].forEach(function (at, i) {
+    playNoiseBurst({ at: at, duration: 0.02, filterType: 'bandpass', filterFreq: 4500, filterQ: 3, gainPeak: 0.32, attack: 0.0005, release: 0.02 });
+    playTone({ at: at, type: 'square', freq: 2200, duration: 0.015, attack: 0.0005, release: 0.015, gainPeak: 0.1 });
+    playTone({ at: at + 0.01, type: 'triangle', freq: 3100, duration: 0.05, attack: 0.001, release: 0.05, gainPeak: 0.05 });
+    if (i === 2) {
+      playNoiseBurst({ at: at + 0.03, duration: 0.12, filterType: 'lowpass', filterFreq: 900, gainPeak: 0.18, attack: 0.01, release: 0.11 });
+    }
   });
 }
 
+// Три слоя на каждый стук - низкий резонанс двери, резкий щелчок костяшкой и
+// среднечастотный "тук" тела двери - плюс небольшой разброс по частоте/
+// громкости/времени между тремя ударами, чтобы не звучать механически
+// одинаково, как настоящая рука.
 function sfxDoorKnock() {
-  [0, 0.32, 0.64].forEach(function (at) {
-    playTone({ at: at, type: 'sine', freq: 130, duration: 0.12, attack: 0.001, release: 0.12, gainPeak: 0.35 });
-    playNoiseBurst({ at: at, duration: 0.06, filterType: 'bandpass', filterFreq: 400, filterQ: 1.2, gainPeak: 0.15, attack: 0.001, release: 0.06 });
+  var times = [0, 0.28, 0.58];
+  times.forEach(function (at) {
+    var amp = 0.28 + Math.random() * 0.12;
+    playTone({ at: at, type: 'sine', freq: 150 + Math.random() * 30, duration: 0.09, attack: 0.001, release: 0.09, gainPeak: amp });
+    playNoiseBurst({ at: at, duration: 0.03, filterType: 'bandpass', filterFreq: 1800, filterQ: 2, gainPeak: 0.18, attack: 0.0005, release: 0.03 });
+    playNoiseBurst({ at: at, duration: 0.07, filterType: 'bandpass', filterFreq: 350, filterQ: 1.5, gainPeak: 0.12, attack: 0.001, release: 0.07 });
   });
 }
 
@@ -4696,9 +4710,17 @@ function sfxHookah() {
   });
 }
 
+// Каждая нота "динь"/"дон" - не одна чистая синусоида, а основной тон плюс
+// два лёгких слегка расстроенных обертона (x2.01/x2.98, не ровно кратные) -
+// это и даёт колокольный, а не гудковый тембр.
 function sfxDoorbell() {
-  playTone({ type: 'sine', freq: 1050, duration: 0.6, attack: 0.01, release: 0.6, gainPeak: 0.28 });
-  playTone({ type: 'sine', freq: 780, duration: 0.7, attack: 0.01, release: 0.7, gainPeak: 0.26, at: 0.45 });
+  function chime(at, freq, duration, peak) {
+    playTone({ at: at, type: 'sine', freq: freq, duration: duration, attack: 0.008, release: duration, gainPeak: peak });
+    playTone({ at: at, type: 'sine', freq: freq * 2.01, duration: duration * 0.6, attack: 0.005, release: duration * 0.55, gainPeak: peak * 0.25 });
+    playTone({ at: at, type: 'sine', freq: freq * 2.98, duration: duration * 0.4, attack: 0.003, release: duration * 0.35, gainPeak: peak * 0.12 });
+  }
+  chime(0, 1050, 0.65, 0.28);
+  chime(0.45, 780, 0.75, 0.26);
 }
 
 // Не через playNoiseBurst - нужна плавная автоматизация частоты фильтра прямо
@@ -4727,14 +4749,27 @@ function sfxPourWater() {
   src.stop(t0 + dur + 0.05);
 }
 
+// Хлопок пробки - "круглый" и низкий (резонанс бутылки/пробки), не резкий
+// щелчок как у банки (см. sfxBeerOpen) - плюс короткий воздушный "пшш" сразу
+// после и лёгкое затухающее шипение пузырьков.
 function sfxChampagnePop() {
-  playNoiseBurst({ duration: 0.05, filterType: 'highpass', filterFreq: 1500, gainPeak: 0.5, attack: 0.001, release: 0.05 });
-  playNoiseBurst({ at: 0.05, duration: 0.8, filterType: 'highpass', filterFreq: 4000, gainPeak: 0.08, attack: 0.01, release: 0.8 });
+  playNoiseBurst({ duration: 0.06, filterType: 'bandpass', filterFreq: 900, filterQ: 1.2, gainPeak: 0.55, attack: 0.001, release: 0.06 });
+  playTone({ type: 'sine', freq: 150, duration: 0.05, attack: 0.001, release: 0.05, gainPeak: 0.3 });
+  playNoiseBurst({ at: 0.05, duration: 0.35, filterType: 'highpass', filterFreq: 3500, gainPeak: 0.12, attack: 0.005, release: 0.32 });
+  playNoiseBurst({ at: 0.3, duration: 0.6, filterType: 'bandpass', filterFreq: 4000, filterQ: 0.7, gainPeak: 0.05, attack: 0.02, release: 0.55 });
 }
 
+// Три слоя: резкий треск кольца, следом громкий "пшш" вырывающегося газа,
+// и тихое затухающее шипение с редкими высокими "искрами" (пузырьки) ещё
+// секунду - вместо одного плоского burst, как было раньше.
 function sfxBeerOpen() {
-  playNoiseBurst({ duration: 0.02, filterType: 'bandpass', filterFreq: 2500, filterQ: 3, gainPeak: 0.25, attack: 0.001, release: 0.02 });
-  playNoiseBurst({ at: 0.03, duration: 0.35, filterType: 'highpass', filterFreq: 3000, gainPeak: 0.18, attack: 0.005, release: 0.35 });
+  playNoiseBurst({ duration: 0.015, filterType: 'bandpass', filterFreq: 3200, filterQ: 4, gainPeak: 0.35, attack: 0.0005, release: 0.015 });
+  playTone({ type: 'square', freq: 1200, duration: 0.02, attack: 0.0005, release: 0.02, gainPeak: 0.12 });
+  playNoiseBurst({ at: 0.02, duration: 0.45, filterType: 'highpass', filterFreq: 2500, gainPeak: 0.28, attack: 0.005, release: 0.4 });
+  playNoiseBurst({ at: 0.35, duration: 0.9, filterType: 'bandpass', filterFreq: 3500, filterQ: 0.6, gainPeak: 0.07, attack: 0.05, release: 0.85 });
+  [0.4, 0.55, 0.75].forEach(function (at) {
+    playTone({ at: at, type: 'sine', freq: 3000 + Math.random() * 2000, duration: 0.03, attack: 0.002, release: 0.03, gainPeak: 0.03 });
+  });
 }
 
 var SOUND_FX_HANDLERS = {
