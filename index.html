@@ -5232,6 +5232,31 @@ function stopLocalPlayback() {
   setMusicButtonActive(false);
 }
 
+// ---------- досинхронизация музыки при быстром возврате из фона ----------
+// Полностью свёрнутый Telegram сам ставит видео на паузу - это ограничение
+// ОС/WebView, JS страницы над ним не властен, и никакого способа продолжать
+// реально играть звук в это время нет. Но если вернулись достаточно быстро
+// (общая сессия ещё не остановлена никем), плеер иначе так и останется молча
+// стоять на паузе бесконечно - pollPlayback перезапускает воспроизведение
+// только при НОВОМ start_at, а не при "тот же сеанс, просто был на паузе".
+// Никакого таймера/автостопа тут больше нет - если не вернулись, музыка
+// просто остаётся на паузе у ОС, пока не нажмёте кнопку вручную.
+function resumePlaybackAfterForeground() {
+  if (!musicOn || !ytPlayer) return;
+  if (!lastPlaybackState || lastPlaybackState.state !== 'playing' || !lastPlaybackState.start_at) return;
+  var elapsed = Math.max(0, (Date.now() - new Date(lastPlaybackState.start_at).getTime()) / 1000);
+  try {
+    ytPlayer.unMute();
+    ytPlayer.seekTo(elapsed, true);
+    ytPlayer.playVideo();
+  } catch (e) {}
+  setMusicButtonActive(true);
+}
+
+document.addEventListener('visibilitychange', function () {
+  if (!document.hidden) resumePlaybackAfterForeground();
+});
+
 function scheduleStart(videoId, startAtIso) {
   ensurePlayer(videoId).then(function () {
     var startAtMs = new Date(startAtIso).getTime();
