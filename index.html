@@ -4703,10 +4703,16 @@ function sfxGlassesClink() {
   playTone({ type: 'sine', freq: 2500, duration: 0.35, attack: 0.002, release: 0.35, gainPeak: 0.16, at: 0.08 });
 }
 
+// Непрерывный приглушённый "воздух" через колбу (нарастает и стихает, как
+// сама затяжка) плюс россыпь пузырьков в воде поверх - у каждого лёгкое
+// падение тона (freqEnd), как у настоящего лопающегося пузыря, и случайный
+// разброс по времени/высоте/громкости, а не ровные одинаковые "бульк"-и.
 function sfxHookah() {
-  playNoiseBurst({ duration: 1.1, filterType: 'lowpass', filterFreq: 500, filterQ: 0.7, gainPeak: 0.22, attack: 0.15, release: 0.9 });
-  [0.1, 0.3, 0.55, 0.8].forEach(function (at) {
-    playTone({ at: at, type: 'sine', freq: 180 + Math.random() * 60, duration: 0.1, attack: 0.005, release: 0.1, gainPeak: 0.1 });
+  var dur = 1.4;
+  playNoiseBurst({ duration: dur, filterType: 'lowpass', filterFreq: 450, filterQ: 0.6, gainPeak: 0.2, attack: 0.2, release: dur - 0.25 });
+  [0.05, 0.15, 0.28, 0.36, 0.5, 0.6, 0.68, 0.82, 0.95, 1.05, 1.15, 1.25].forEach(function (at) {
+    var f0 = 140 + Math.random() * 120;
+    playTone({ at: at, type: 'sine', freq: f0, freqEnd: f0 * 0.6, duration: 0.07 + Math.random() * 0.03, attack: 0.003, release: 0.08, gainPeak: 0.05 + Math.random() * 0.05 });
   });
 }
 
