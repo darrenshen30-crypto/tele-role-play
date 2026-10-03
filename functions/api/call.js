@@ -62,10 +62,10 @@ export async function onRequestPost(context) {
   let message = null;
   try {
     message = await env.DB.prepare(
-      "INSERT INTO club_messages (club_id, user_id, user_name, text, character_id, character_name, character_avatar_file_id, call_to_character_id) " +
-        "VALUES (?, ?, ?, '', ?, ?, ?, ?) " +
+      "INSERT INTO club_messages (club_id, user_id, user_name, text, character_id, character_name, character_avatar_file_id, call_to_character_id, call_to_owner_id) " +
+        "VALUES (?, ?, ?, '', ?, ?, ?, ?, ?) " +
         "RETURNING id, user_id, user_name, text, created_at, edited_at, character_id, character_name, character_avatar_file_id, call_to_character_id"
-    ).bind(clubId, String(userId), userName || null, character.id, character.name, character.avatar_file_id, target.id).first();
+    ).bind(clubId, String(userId), userName || null, character.id, character.name, character.avatar_file_id, target.id, String(target.owner_id)).first();
   } catch (e) {
     console.log("Ошибка звонка:", e.message);
     return json({ error: "Не удалось позвонить." }, 500);

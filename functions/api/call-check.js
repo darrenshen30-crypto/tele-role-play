@@ -30,11 +30,19 @@ export async function onRequestGet(context) {
   const userId = context.data && context.data.tgUserId;
   if (!isOwner(env, userId)) return json({ error: "Нет доступа." }, 403);
 
+  // call_to_owner_id - денормализованный owner_id адресата, записанный прямо
+  // при звонке (см. call.js), вместо JOIN на characters по call_to_character_id.
+  // Без него и без индекса этот запрос (на каждом тике ВСЕГДА включённого
+  // глобального опроса, с любого экрана, см. index.html: pollGlobalCallCheck)
+  // читал практически всю club_messages на каждый вызов - именно это
+  // исчерпало дневной лимит чтения D1 2026-10-03/04 (1500+ строк за один
+  // такий опрос при полутора тысячах сообщений в комнатах). С частичным
+  // индексом на call_to_owner_id (только у звонков, не NULL) запрос трогает
+  // лишь сами звонки, а не всю историю переписки.
   const row = await env.DB.prepare(
-    "SELECT cm.id, cm.club_id, cm.user_name, cm.character_name, cm.character_avatar_file_id, cm.created_at " +
-      "FROM club_messages cm JOIN characters callee ON callee.id = cm.call_to_character_id " +
-      "WHERE callee.owner_id = ? AND cm.call_response IS NULL " +
-      "ORDER BY cm.id DESC LIMIT 1"
+    "SELECT id, club_id, user_name, character_name, character_avatar_file_id, created_at " +
+      "FROM club_messages WHERE call_to_owner_id = ? AND call_response IS NULL " +
+      "ORDER BY id DESC LIMIT 1"
   ).bind(String(userId)).first();
 
   if (!row) return json({ call: null });

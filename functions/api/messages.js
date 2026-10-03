@@ -206,17 +206,14 @@ export async function onRequestGet(context) {
       "WHERE cc.club_id = ? AND cc.checked_in_at > datetime('now', '-24 hours')"
   ).bind(clubId).all();
 
-  // Отмечаем, что этот пользователь прямо сейчас опрашивает именно эту
-  // локацию (см. room-sound.js: звук атмосферы разрешён, только если у
-  // собеседника есть такая же свежая отметка) - фоново, не блокирует ответ.
-  // datetime('now') на стороне SQL, а не JS-строка ISO с 'T'/'Z' - иначе
-  // текстовое сравнение "> datetime('now', '-8 seconds')" в room-sound.js
-  // сравнивало бы разные форматы и было бы не о времени, а о том, что 'T'
-  // лексикографически больше пробела.
-  context.waitUntil(env.DB.prepare(
-    "INSERT INTO club_reads (club_id, user_id, last_read_message_id, last_polled_at) VALUES (?, ?, 0, datetime('now')) " +
-      "ON CONFLICT(club_id, user_id) DO UPDATE SET last_polled_at = excluded.last_polled_at"
-  ).bind(clubId, String(userId)).run());
+  // last_polled_at (см. room-sound.js) ВРЕМЕННО НЕ пишем - кнопка звуков
+  // атмосферы сейчас убрана из интерфейса (см. index.html), и эта отметка
+  // писалась бы на каждый опрос комнаты вхолостую, без единого читателя.
+  // Раскомментировать при возврате кнопки:
+  // context.waitUntil(env.DB.prepare(
+  //   "INSERT INTO club_reads (club_id, user_id, last_read_message_id, last_polled_at) VALUES (?, ?, 0, datetime('now')) " +
+  //     "ON CONFLICT(club_id, user_id) DO UPDATE SET last_polled_at = excluded.last_polled_at"
+  // ).bind(clubId, String(userId)).run());
 
   return json({
     messages: markIncomingCalls(results || [], userId),
