@@ -65,41 +65,15 @@ async function notifyRecipient(env, threadId, recipientId, messageId) {
   }
 }
 
-export async function onRequestGet(context) {
-  const env = context.env;
-  const userId = context.data && context.data.tgUserId;
-  if (!isOwner(env, userId)) return json({ error: "Нет доступа." }, 403);
+// Общие для всех трёх режимов колонки - как MESSAGE_COLUMNS в messages.js.
+const MESSAGE_COLUMNS =
+  "cm.id, cm.sender_user_id, cm.character_name, cm.character_avatar_file_id, cm.text, cm.created_at, cm.edited_at, cm.reply_to_id, cm.photo_file_id, " +
+  "cm.is_call, cm.transfer_amount_cents, " +
+  "rm.text AS reply_text, rm.character_name AS reply_character_name " +
+  "FROM sms_messages cm LEFT JOIN sms_messages rm ON rm.id = cm.reply_to_id";
 
-  const params = new URL(context.request.url).searchParams;
-  const threadId = params.get("thread_id");
-  const afterId = params.get("after_id") || "0";
-  const afterEdit = params.get("after_edit") || "";
-  if (!threadId) return json({ error: "Не указана переписка." }, 400);
-
-  const access = await resolveThread(env, threadId, userId);
-  if (!access) return json({ error: "Нет доступа к этой переписке." }, 403);
-
-  // "thread_id = ? AND (id > ? OR edited_at > ?)" заставляет SQLite выбрать
-  // один индекс и построчно фильтровать ВЕСЬ тред вместо поиска по двум
-  // отдельным индексам - на деле читает всю историю переписки на каждый опрос
-  // (проверено на проде: 151 прочитанная строка на "ничего нового" для треда
-  // из 150 сообщений - это и есть причина обрыва прогрузки SMS). UNION двух
-  // подзапросов по id даёт каждой половине свой индекс (idx_sms_messages
-  // _thread_id / _thread_edited) -> 4 строки на тот же случай. Та же причина
-  // и починка, что у messages.js (комната)/dm-messages.js.
-  const { results } = await env.DB.prepare(
-    "SELECT cm.id, cm.sender_user_id, cm.character_name, cm.character_avatar_file_id, cm.text, cm.created_at, cm.edited_at, cm.reply_to_id, cm.photo_file_id, " +
-      "cm.is_call, cm.transfer_amount_cents, " +
-      "rm.text AS reply_text, rm.character_name AS reply_character_name " +
-      "FROM sms_messages cm LEFT JOIN sms_messages rm ON rm.id = cm.reply_to_id " +
-      "WHERE cm.id IN (" +
-        "SELECT id FROM sms_messages WHERE thread_id = ? AND id > ? " +
-        "UNION " +
-        "SELECT id FROM sms_messages WHERE thread_id = ? AND edited_at IS NOT NULL AND edited_at > ?" +
-      ") ORDER BY cm.id ASC LIMIT 200"
-  ).bind(threadId, afterId, threadId, afterEdit).all();
-
-  const messages = (results || []).map(function (row) {
+function mapRows(rows) {
+  return rows.map(function (row) {
     const message = {
       id: row.id, sender_user_id: row.sender_user_id, character_name: row.character_name,
       character_avatar_file_id: row.character_avatar_file_id, text: row.text,
@@ -111,12 +85,102 @@ export async function onRequestGet(context) {
     }
     return message;
   });
+}
+
+// Та же схема хвоста/пролистывания вверх, что в messages.js (комната):
+// при входе читался фиксированный LIMIT 200 по ASC id, то есть САМЫЕ СТАРЫЕ
+// 200 сообщений треда, а не хвост - в длинной переписке это выглядело как
+// "подгрузилось из середины чата", и настоящий хвост дотягивался только через
+// несколько обычных опросов подряд (по 200 за раз). Теперь при входе берём
+// хвост, размер которого подстраивается под непрочитанное, а остальная
+// история - по запросу (пролистывание вверх, before_id).
+const INITIAL_LOAD_MIN = 30;
+const INITIAL_LOAD_MAX = 200;
+const OLDER_PAGE_SIZE = 50;
+
+export async function onRequestGet(context) {
+  const env = context.env;
+  const userId = context.data && context.data.tgUserId;
+  if (!isOwner(env, userId)) return json({ error: "Нет доступа." }, 403);
+
+  const params = new URL(context.request.url).searchParams;
+  const threadId = params.get("thread_id");
+  const beforeId = params.get("before_id");
+  const isInitial = params.get("initial") === "1";
+  const afterId = params.get("after_id") || "0";
+  const afterEdit = params.get("after_edit") || "";
+  if (!threadId) return json({ error: "Не указана переписка." }, 400);
+
+  const access = await resolveThread(env, threadId, userId);
+  if (!access) return json({ error: "Нет доступа к этой переписке." }, 403);
+
+  let messages;
+  let hasMore = false;
+  let initialEditBaseline = null;
+
+  if (beforeId) {
+    // Пролистывание вверх - следующая по возрасту пачка перед тем, что уже
+    // показано. DESC к before_id, потом разворачиваем в порядок id ASC.
+    const r = await env.DB.prepare(
+      "SELECT " + MESSAGE_COLUMNS + " WHERE cm.thread_id = ? AND cm.id < ? ORDER BY cm.id DESC LIMIT ?"
+    ).bind(threadId, beforeId, OLDER_PAGE_SIZE + 1).all();
+    const rows = r.results || [];
+    hasMore = rows.length > OLDER_PAGE_SIZE;
+    messages = mapRows(rows.slice(0, OLDER_PAGE_SIZE).reverse());
+  } else if (isInitial) {
+    // Первый вход в переписку - хвост, размер которого подстраивается под
+    // непрочитанное, а не фиксированные 200 самых старых сообщений.
+    const readRow = await env.DB.prepare(
+      "SELECT last_read_message_id FROM sms_reads WHERE thread_id = ? AND user_id = ?"
+    ).bind(threadId, String(userId)).first();
+    const lastRead = readRow ? readRow.last_read_message_id : 0;
+    const unread = await env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM sms_messages WHERE thread_id = ? AND id > ?"
+    ).bind(threadId, lastRead).first();
+    const limit = Math.min(INITIAL_LOAD_MAX, Math.max(INITIAL_LOAD_MIN, (unread ? unread.n : 0) + 10));
+    const r = await env.DB.prepare(
+      "SELECT " + MESSAGE_COLUMNS + " WHERE cm.thread_id = ? ORDER BY cm.id DESC LIMIT ?"
+    ).bind(threadId, limit).all();
+    const rows = r.results || [];
+    hasMore = rows.length >= limit;
+    messages = mapRows(rows.reverse());
+    // Хвост не покрывает всю историю - без явного порога обычный опрос
+    // принял бы любое когда-либо отредактированное сообщение треда за новое
+    // (см. тот же приём в messages.js).
+    const editRow = await env.DB.prepare(
+      "SELECT MAX(edited_at) AS v FROM sms_messages WHERE thread_id = ?"
+    ).bind(threadId).first();
+    initialEditBaseline = (editRow && editRow.v) || "";
+  } else {
+    // "thread_id = ? AND (id > ? OR edited_at > ?)" заставляет SQLite выбрать
+    // один индекс и построчно фильтровать ВЕСЬ тред вместо поиска по двум
+    // отдельным индексам - на деле читает всю историю переписки на каждый опрос
+    // (проверено на проде: 151 прочитанная строка на "ничего нового" для треда
+    // из 150 сообщений). UNION двух подзапросов по id даёт каждой половине
+    // свой индекс (idx_sms_messages_thread_id / _thread_edited) -> 4 строки на
+    // тот же случай. Та же причина и починка, что у messages.js (комната)/
+    // dm-messages.js.
+    const r = await env.DB.prepare(
+      "SELECT " + MESSAGE_COLUMNS +
+        " WHERE cm.id IN (" +
+          "SELECT id FROM sms_messages WHERE thread_id = ? AND id > ? " +
+          "UNION " +
+          "SELECT id FROM sms_messages WHERE thread_id = ? AND edited_at IS NOT NULL AND edited_at > ?" +
+        ") ORDER BY cm.id ASC LIMIT 200"
+    ).bind(threadId, afterId, threadId, afterEdit).all();
+    messages = mapRows(r.results || []);
+  }
 
   const otherRead = await env.DB.prepare(
     "SELECT MIN(last_read_message_id) AS v FROM sms_reads WHERE thread_id = ? AND user_id != ?"
   ).bind(threadId, String(userId)).first();
 
-  return json({ messages: messages, other_read_id: (otherRead && otherRead.v != null) ? otherRead.v : 0 });
+  return json({
+    messages: messages,
+    has_more: hasMore,
+    other_read_id: (otherRead && otherRead.v != null) ? otherRead.v : 0,
+    initial_edit_baseline: isInitial ? initialEditBaseline : undefined,
+  });
 }
 
 export async function onRequestPost(context) {

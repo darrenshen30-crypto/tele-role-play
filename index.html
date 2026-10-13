@@ -2242,6 +2242,9 @@ var smsLastEditCheck = '';
 var smsOtherReadId = 0;
 var smsEditingMessageId = null;
 var smsForceScrollToBottom = false;
+var smsOldestMessageId = null;
+var smsHasMoreOlderMessages = false;
+var smsLoadingOlderMessages = false;
 var smsReplyToId = null;
 var pendingSmsPhotoFileId = null;
 
@@ -2256,6 +2259,9 @@ var dmLastEditCheck = '';
 var dmOtherReadId = 0;
 var dmEditingMessageId = null;
 var dmForceScrollToBottom = false;
+var dmOldestMessageId = null;
+var dmHasMoreOlderMessages = false;
+var dmLoadingOlderMessages = false;
 var pollTimer = null;
 var playbackPollTimer = null;
 var ytPlayer = null;
@@ -3416,6 +3422,8 @@ function openSmsChat(threadId, myCharacter, otherCharacter) {
   smsLastMessageId = 0;
   smsLastEditCheck = '';
   smsOtherReadId = 0;
+  smsOldestMessageId = null;
+  smsHasMoreOlderMessages = false;
   cancelSmsEdit();
   cancelSmsReply();
   document.getElementById('sms-messages').innerHTML = '';
@@ -3527,9 +3535,13 @@ function pollSmsMessages() {
   var isInitialLoad = smsLastMessageId === 0;
   var forced = smsForceScrollToBottom;
   smsForceScrollToBottom = false;
-  api('/api/sms-messages?thread_id=' + currentSmsThread.id + '&after_id=' + smsLastMessageId + '&after_edit=' + encodeURIComponent(smsLastEditCheck))
+  var url = '/api/sms-messages?thread_id=' + currentSmsThread.id + '&after_id=' + smsLastMessageId + '&after_edit=' + encodeURIComponent(smsLastEditCheck);
+  if (isInitialLoad) url += '&initial=1';
+  api(url)
     .then(function (data) {
       smsOtherReadId = data.other_read_id || 0;
+      if (isInitialLoad) smsHasMoreOlderMessages = !!data.has_more;
+      if (isInitialLoad && data.initial_edit_baseline) smsLastEditCheck = data.initial_edit_baseline;
       if (data.messages.length) {
         var box = document.getElementById('sms-messages');
         var wasAtBottom = isInitialLoad || forced || (box.scrollHeight - box.scrollTop - box.clientHeight < 60);
@@ -3537,6 +3549,7 @@ function pollSmsMessages() {
           var existing = box.querySelector('[data-id="' + m.id + '"]');
           if (existing) existing.replaceWith(renderSmsMessage(m)); else box.appendChild(renderSmsMessage(m));
           smsLastMessageId = Math.max(smsLastMessageId, m.id);
+          if (smsOldestMessageId === null || m.id < smsOldestMessageId) smsOldestMessageId = m.id;
           if (m.edited_at && m.edited_at > smsLastEditCheck) smsLastEditCheck = m.edited_at;
         });
         if (wasAtBottom) box.scrollTop = box.scrollHeight;
@@ -3550,6 +3563,30 @@ function pollSmsMessages() {
       updateSmsScrollBtn();
     }).catch(function () {});
 }
+
+// Подгрузка старой истории SMS по прокрутке вверх - то же, что
+// maybeLoadOlderMessages у комнаты (см. messages.js).
+function maybeLoadOlderSmsMessages() {
+  if (!currentSmsThread || smsLoadingOlderMessages || !smsHasMoreOlderMessages || smsOldestMessageId === null) return;
+  var box = document.getElementById('sms-messages');
+  if (box.scrollTop > 40) return;
+  smsLoadingOlderMessages = true;
+  api('/api/sms-messages?thread_id=' + currentSmsThread.id + '&before_id=' + smsOldestMessageId)
+    .then(function (data) {
+      smsHasMoreOlderMessages = !!data.has_more;
+      if (data.messages.length) {
+        var prevHeight = box.scrollHeight;
+        var frag = document.createDocumentFragment();
+        data.messages.forEach(function (m) {
+          if (smsOldestMessageId === null || m.id < smsOldestMessageId) smsOldestMessageId = m.id;
+          frag.appendChild(renderSmsMessage(m));
+        });
+        box.insertBefore(frag, box.firstChild);
+        box.scrollTop = box.scrollHeight - prevHeight + box.scrollTop;
+      }
+    }).catch(function () {}).finally(function () { smsLoadingOlderMessages = false; });
+}
+document.getElementById('sms-messages').addEventListener('scroll', function () { maybeLoadOlderSmsMessages(); });
 
 function startSmsEditMessage(m) {
   cancelSmsReply();
@@ -3763,6 +3800,8 @@ function openDmChat(threadId, other) {
   dmLastMessageId = 0;
   dmLastEditCheck = '';
   dmOtherReadId = 0;
+  dmOldestMessageId = null;
+  dmHasMoreOlderMessages = false;
   cancelDmEdit();
   document.getElementById('dm-messages').innerHTML = '';
   document.getElementById('dm-chat-title').textContent = other.name;
@@ -3818,9 +3857,13 @@ function pollDmMessages() {
   var isInitialLoad = dmLastMessageId === 0;
   var forced = dmForceScrollToBottom;
   dmForceScrollToBottom = false;
-  api('/api/dm-messages?thread_id=' + currentDmThread.id + '&after_id=' + dmLastMessageId + '&after_edit=' + encodeURIComponent(dmLastEditCheck))
+  var url = '/api/dm-messages?thread_id=' + currentDmThread.id + '&after_id=' + dmLastMessageId + '&after_edit=' + encodeURIComponent(dmLastEditCheck);
+  if (isInitialLoad) url += '&initial=1';
+  api(url)
     .then(function (data) {
       dmOtherReadId = data.other_read_id || 0;
+      if (isInitialLoad) dmHasMoreOlderMessages = !!data.has_more;
+      if (isInitialLoad && data.initial_edit_baseline) dmLastEditCheck = data.initial_edit_baseline;
       if (data.messages.length) {
         var box = document.getElementById('dm-messages');
         var wasAtBottom = isInitialLoad || forced || (box.scrollHeight - box.scrollTop - box.clientHeight < 60);
@@ -3828,6 +3871,7 @@ function pollDmMessages() {
           var existing = box.querySelector('[data-id="' + m.id + '"]');
           if (existing) existing.replaceWith(renderDmMessage(m)); else box.appendChild(renderDmMessage(m));
           dmLastMessageId = Math.max(dmLastMessageId, m.id);
+          if (dmOldestMessageId === null || m.id < dmOldestMessageId) dmOldestMessageId = m.id;
           if (m.edited_at && m.edited_at > dmLastEditCheck) dmLastEditCheck = m.edited_at;
         });
         if (wasAtBottom) box.scrollTop = box.scrollHeight;
@@ -3841,6 +3885,30 @@ function pollDmMessages() {
       updateDmScrollBtn();
     }).catch(function () {});
 }
+
+// Подгрузка старой истории личных сообщений по прокрутке вверх - то же, что
+// maybeLoadOlderMessages у комнаты (см. messages.js).
+function maybeLoadOlderDmMessages() {
+  if (!currentDmThread || dmLoadingOlderMessages || !dmHasMoreOlderMessages || dmOldestMessageId === null) return;
+  var box = document.getElementById('dm-messages');
+  if (box.scrollTop > 40) return;
+  dmLoadingOlderMessages = true;
+  api('/api/dm-messages?thread_id=' + currentDmThread.id + '&before_id=' + dmOldestMessageId)
+    .then(function (data) {
+      dmHasMoreOlderMessages = !!data.has_more;
+      if (data.messages.length) {
+        var prevHeight = box.scrollHeight;
+        var frag = document.createDocumentFragment();
+        data.messages.forEach(function (m) {
+          if (dmOldestMessageId === null || m.id < dmOldestMessageId) dmOldestMessageId = m.id;
+          frag.appendChild(renderDmMessage(m));
+        });
+        box.insertBefore(frag, box.firstChild);
+        box.scrollTop = box.scrollHeight - prevHeight + box.scrollTop;
+      }
+    }).catch(function () {}).finally(function () { dmLoadingOlderMessages = false; });
+}
+document.getElementById('dm-messages').addEventListener('scroll', function () { maybeLoadOlderDmMessages(); });
 
 function startDmEditMessage(m) {
   dmEditingMessageId = m.id;

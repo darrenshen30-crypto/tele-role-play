@@ -58,6 +58,17 @@ async function notifyRecipient(env, threadId, recipientId, messageId) {
   }
 }
 
+const DM_COLUMNS = "id, sender_user_id, text, created_at, edited_at FROM dm_messages";
+
+// Та же схема хвоста/пролистывания вверх, что в messages.js (комната)/
+// sms-messages.js: раньше при входе читался фиксированный LIMIT 200 по ASC
+// id - то есть самые старые 200 сообщений треда, а не хвост, из-за чего
+// длинная переписка открывалась будто "с середины", и настоящий хвост
+// дотягивался только через несколько обычных опросов подряд.
+const INITIAL_LOAD_MIN = 30;
+const INITIAL_LOAD_MAX = 200;
+const OLDER_PAGE_SIZE = 50;
+
 export async function onRequestGet(context) {
   const env = context.env;
   const userId = context.data && context.data.tgUserId;
@@ -65,6 +76,8 @@ export async function onRequestGet(context) {
 
   const params = new URL(context.request.url).searchParams;
   const threadId = params.get("thread_id");
+  const beforeId = params.get("before_id");
+  const isInitial = params.get("initial") === "1";
   const afterId = params.get("after_id") || "0";
   const afterEdit = params.get("after_edit") || "";
   if (!threadId) return json({ error: "Не указана переписка." }, 400);
@@ -72,25 +85,63 @@ export async function onRequestGet(context) {
   const access = await resolveThread(env, threadId, userId);
   if (!access) return json({ error: "Нет доступа к этой переписке." }, 403);
 
-  // Та же причина и починка, что в messages.js (комната)/sms-messages.js:
-  // "thread_id = ? AND (id > ? OR edited_at > ?)" читает весь тред на каждый
-  // опрос, т.к. SQLite не делит OR между двумя индексами. UNION двух
-  // подзапросов по id даёт каждой половине свой индекс (idx_dm_messages
-  // _thread_id / _thread_edited).
-  const { results } = await env.DB.prepare(
-    "SELECT id, sender_user_id, text, created_at, edited_at FROM dm_messages " +
-      "WHERE id IN (" +
-        "SELECT id FROM dm_messages WHERE thread_id = ? AND id > ? " +
-        "UNION " +
-        "SELECT id FROM dm_messages WHERE thread_id = ? AND edited_at IS NOT NULL AND edited_at > ?" +
-      ") ORDER BY id ASC LIMIT 200"
-  ).bind(threadId, afterId, threadId, afterEdit).all();
+  let messages;
+  let hasMore = false;
+  let initialEditBaseline = null;
+
+  if (beforeId) {
+    const r = await env.DB.prepare(
+      "SELECT " + DM_COLUMNS + " WHERE thread_id = ? AND id < ? ORDER BY id DESC LIMIT ?"
+    ).bind(threadId, beforeId, OLDER_PAGE_SIZE + 1).all();
+    const rows = r.results || [];
+    hasMore = rows.length > OLDER_PAGE_SIZE;
+    messages = rows.slice(0, OLDER_PAGE_SIZE).reverse();
+  } else if (isInitial) {
+    const readRow = await env.DB.prepare(
+      "SELECT last_read_message_id FROM dm_reads WHERE thread_id = ? AND user_id = ?"
+    ).bind(threadId, String(userId)).first();
+    const lastRead = readRow ? readRow.last_read_message_id : 0;
+    const unread = await env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM dm_messages WHERE thread_id = ? AND id > ?"
+    ).bind(threadId, lastRead).first();
+    const limit = Math.min(INITIAL_LOAD_MAX, Math.max(INITIAL_LOAD_MIN, (unread ? unread.n : 0) + 10));
+    const r = await env.DB.prepare(
+      "SELECT " + DM_COLUMNS + " WHERE thread_id = ? ORDER BY id DESC LIMIT ?"
+    ).bind(threadId, limit).all();
+    const rows = r.results || [];
+    hasMore = rows.length >= limit;
+    messages = rows.reverse();
+    const editRow = await env.DB.prepare(
+      "SELECT MAX(edited_at) AS v FROM dm_messages WHERE thread_id = ?"
+    ).bind(threadId).first();
+    initialEditBaseline = (editRow && editRow.v) || "";
+  } else {
+    // Та же причина и починка, что в messages.js (комната)/sms-messages.js:
+    // "thread_id = ? AND (id > ? OR edited_at > ?)" читает весь тред на каждый
+    // опрос, т.к. SQLite не делит OR между двумя индексами. UNION двух
+    // подзапросов по id даёт каждой половине свой индекс (idx_dm_messages
+    // _thread_id / _thread_edited).
+    const r = await env.DB.prepare(
+      "SELECT " + DM_COLUMNS +
+        " WHERE id IN (" +
+          "SELECT id FROM dm_messages WHERE thread_id = ? AND id > ? " +
+          "UNION " +
+          "SELECT id FROM dm_messages WHERE thread_id = ? AND edited_at IS NOT NULL AND edited_at > ?" +
+        ") ORDER BY id ASC LIMIT 200"
+    ).bind(threadId, afterId, threadId, afterEdit).all();
+    messages = r.results || [];
+  }
 
   const otherRead = await env.DB.prepare(
     "SELECT MIN(last_read_message_id) AS v FROM dm_reads WHERE thread_id = ? AND user_id != ?"
   ).bind(threadId, String(userId)).first();
 
-  return json({ messages: results || [], other_read_id: (otherRead && otherRead.v != null) ? otherRead.v : 0 });
+  return json({
+    messages: messages,
+    has_more: hasMore,
+    other_read_id: (otherRead && otherRead.v != null) ? otherRead.v : 0,
+    initial_edit_baseline: isInitial ? initialEditBaseline : undefined,
+  });
 }
 
 export async function onRequestPost(context) {
