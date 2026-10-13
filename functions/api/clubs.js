@@ -30,7 +30,12 @@ export async function onRequestGet(context) {
       "COALESCE(r.last_read_message_id, 0) AS last_read_message_id " +
       "FROM clubs c " +
       "LEFT JOIN club_reads r ON r.club_id = c.id AND r.user_id = ? " +
-      "ORDER BY c.category, c.name"
+      // Ротация по активности, а не по порядку создания - last_message_id
+      // растёт монотонно по всей club_messages (общий автоинкремент), так
+      // что сортировка по нему DESC = "где только что говорили" наверху, без
+      // отдельной колонки с меткой времени. NULL (ещё ни одного сообщения)
+      // в SQLite при DESC сам уходит в конец, для них - по имени.
+      "ORDER BY c.last_message_id DESC, c.name"
   ).bind(String(userId)).all();
 
   // Кто сейчас "отмечен" в локациях (см. club-checkin.js) - отдельным
