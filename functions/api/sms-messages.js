@@ -79,13 +79,25 @@ export async function onRequestGet(context) {
   const access = await resolveThread(env, threadId, userId);
   if (!access) return json({ error: "Нет доступа к этой переписке." }, 403);
 
+  // "thread_id = ? AND (id > ? OR edited_at > ?)" заставляет SQLite выбрать
+  // один индекс и построчно фильтровать ВЕСЬ тред вместо поиска по двум
+  // отдельным индексам - на деле читает всю историю переписки на каждый опрос
+  // (проверено на проде: 151 прочитанная строка на "ничего нового" для треда
+  // из 150 сообщений - это и есть причина обрыва прогрузки SMS). UNION двух
+  // подзапросов по id даёт каждой половине свой индекс (idx_sms_messages
+  // _thread_id / _thread_edited) -> 4 строки на тот же случай. Та же причина
+  // и починка, что у messages.js (комната)/dm-messages.js.
   const { results } = await env.DB.prepare(
     "SELECT cm.id, cm.sender_user_id, cm.character_name, cm.character_avatar_file_id, cm.text, cm.created_at, cm.edited_at, cm.reply_to_id, cm.photo_file_id, " +
       "cm.is_call, cm.transfer_amount_cents, " +
       "rm.text AS reply_text, rm.character_name AS reply_character_name " +
       "FROM sms_messages cm LEFT JOIN sms_messages rm ON rm.id = cm.reply_to_id " +
-      "WHERE cm.thread_id = ? AND (cm.id > ? OR (cm.edited_at IS NOT NULL AND cm.edited_at > ?)) ORDER BY cm.id ASC LIMIT 200"
-  ).bind(threadId, afterId, afterEdit).all();
+      "WHERE cm.id IN (" +
+        "SELECT id FROM sms_messages WHERE thread_id = ? AND id > ? " +
+        "UNION " +
+        "SELECT id FROM sms_messages WHERE thread_id = ? AND edited_at IS NOT NULL AND edited_at > ?" +
+      ") ORDER BY cm.id ASC LIMIT 200"
+  ).bind(threadId, afterId, threadId, afterEdit).all();
 
   const messages = (results || []).map(function (row) {
     const message = {

@@ -159,12 +159,25 @@ export async function onRequestGet(context) {
     ).bind(clubId).first();
     initialEditBaseline = (editRow && editRow.v) || "";
   } else {
-    // Обычный опрос - только новое и отредактированное с прошлого раза,
-    // как и раньше (дёшево независимо от общей длины истории комнаты).
+    // Обычный опрос - только новое и отредактированное с прошлого раза.
+    // ВАЖНО: "club_id = ? AND (id > ? OR edited_at > ?)" выглядит дешёвым, но
+    // SQLite не умеет разбить OR на поиск по двум разным индексам сразу -
+    // выбирает один индекс по club_id и дальше построчно фильтрует ВЕСЬ
+    // раздел комнаты по условию, то есть реально читает всю историю комнаты
+    // на каждый опрос (отсюда и обрыв прогрузки чатов, дневной лимит чтения
+    // D1 исчерпывается независимо от того, что действительно нового). Чтобы
+    // каждая половина OR использовала свой индекс отдельно (idx_club_messages
+    // _club_id / _club_edited), переписано как UNION двух подзапросов по id -
+    // проверено напрямую на проде: 858 прочитанных строк в "ничего нового" ->
+    // 4. Та же причина и починка, что у sms-messages.js/dm-messages.js.
     const r = await env.DB.prepare(
       "SELECT " + MESSAGE_COLUMNS +
-        " WHERE cm.club_id = ? AND (cm.id > ? OR (cm.edited_at IS NOT NULL AND cm.edited_at > ?)) ORDER BY cm.id ASC LIMIT 200"
-    ).bind(String(userId), String(userId), clubId, afterId, afterEdit).all();
+        " WHERE cm.id IN (" +
+          "SELECT id FROM club_messages WHERE club_id = ? AND id > ? " +
+          "UNION " +
+          "SELECT id FROM club_messages WHERE club_id = ? AND edited_at IS NOT NULL AND edited_at > ?" +
+        ") ORDER BY cm.id ASC LIMIT 200"
+    ).bind(String(userId), String(userId), clubId, afterId, clubId, afterEdit).all();
     results = r.results || [];
   }
 

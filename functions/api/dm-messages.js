@@ -72,10 +72,19 @@ export async function onRequestGet(context) {
   const access = await resolveThread(env, threadId, userId);
   if (!access) return json({ error: "Нет доступа к этой переписке." }, 403);
 
+  // Та же причина и починка, что в messages.js (комната)/sms-messages.js:
+  // "thread_id = ? AND (id > ? OR edited_at > ?)" читает весь тред на каждый
+  // опрос, т.к. SQLite не делит OR между двумя индексами. UNION двух
+  // подзапросов по id даёт каждой половине свой индекс (idx_dm_messages
+  // _thread_id / _thread_edited).
   const { results } = await env.DB.prepare(
     "SELECT id, sender_user_id, text, created_at, edited_at FROM dm_messages " +
-      "WHERE thread_id = ? AND (id > ? OR (edited_at IS NOT NULL AND edited_at > ?)) ORDER BY id ASC LIMIT 200"
-  ).bind(threadId, afterId, afterEdit).all();
+      "WHERE id IN (" +
+        "SELECT id FROM dm_messages WHERE thread_id = ? AND id > ? " +
+        "UNION " +
+        "SELECT id FROM dm_messages WHERE thread_id = ? AND edited_at IS NOT NULL AND edited_at > ?" +
+      ") ORDER BY id ASC LIMIT 200"
+  ).bind(threadId, afterId, threadId, afterEdit).all();
 
   const otherRead = await env.DB.prepare(
     "SELECT MIN(last_read_message_id) AS v FROM dm_reads WHERE thread_id = ? AND user_id != ?"
